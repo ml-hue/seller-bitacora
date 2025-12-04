@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
-import { supabase } from './supabaseClient';
+import { supabase } from "./supabaseClient";
 import "./index.css";
 
 function App() {
   useEffect(() => {
     const testSupabase = async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*");
+      const { data, error } = await supabase.from("projects").select("*");
 
       console.log("Supabase projects:", data);
       if (error) console.error("Supabase ERROR:", error);
@@ -15,6 +13,7 @@ function App() {
 
     testSupabase();
   }, []);
+
   const [selectedProject, setSelectedProject] = useState("Karu");
   const [notes, setNotes] = useState([
     {
@@ -25,6 +24,9 @@ function App() {
       tag: "Kickoff",
       summary:
         "Revisión de objetivos comerciales, definición de tablero de control y stakeholders clave.",
+      // NUEVOS CAMPOS
+      clientResponsible: "Dirección Comercial Karu",
+      clientStatus: "realizado",
     },
   ]);
 
@@ -32,15 +34,19 @@ function App() {
   const activeNote = notes.find(
     (n) => n.id === activeNoteId && n.project === selectedProject
   );
+
   const projectNotes = notes
     .filter((n) => n.project === selectedProject)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
+  // NUEVOS CAMPOS EN EL DRAFT
   const [draft, setDraft] = useState({
     title: "",
     date: new Date().toISOString().slice(0, 10),
     tag: "Sesión",
     summary: "",
+    clientResponsible: "",
+    clientStatus: "postergado",
   });
 
   const projects = ["Karu", "Everdem", "Salumax", "Labco"];
@@ -59,7 +65,15 @@ function App() {
       date: new Date().toISOString().slice(0, 10),
       tag: "Sesión",
       summary: "",
+      clientResponsible: "",
+      clientStatus: "postergado",
     });
+  };
+
+  const formatClientStatus = (status) => {
+    if (status === "realizado") return "Realizado";
+    if (status === "postergado") return "Postergado";
+    return "No realizado";
   };
 
   return (
@@ -79,9 +93,7 @@ function App() {
             value={selectedProject}
             onChange={(e) => {
               setSelectedProject(e.target.value);
-              const first = notes.find(
-                (n) => n.project === e.target.value
-              );
+              const first = notes.find((n) => n.project === e.target.value);
               setActiveNoteId(first ? first.id : undefined);
             }}
           >
@@ -145,6 +157,40 @@ function App() {
                 </div>
               </div>
 
+              {/* NUEVA FILA: RESPONSABLE Y ESTADO CLIENTE */}
+              <div className="field-row">
+                <div className="field-group">
+                  <label className="field-label">
+                    Responsable del lado cliente
+                  </label>
+                  <input
+                    className="field-input"
+                    placeholder="Ej: Gerente Comercial, Dirección, etc."
+                    value={draft.clientResponsible}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        clientResponsible: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Estado compromiso cliente</label>
+                  <select
+                    className="field-input"
+                    value={draft.clientStatus}
+                    onChange={(e) =>
+                      setDraft({ ...draft, clientStatus: e.target.value })
+                    }
+                  >
+                    <option value="realizado">Realizado</option>
+                    <option value="postergado">Postergado</option>
+                    <option value="no_realizado">No realizado</option>
+                  </select>
+                </div>
+              </div>
+
               <textarea
                 className="field-textarea"
                 rows={3}
@@ -201,6 +247,11 @@ function App() {
                     </div>
                     <div className="note-tags">
                       <span className="tag">{note.tag}</span>
+                      {note.clientStatus && (
+                        <span className="tag tag--status">
+                          {formatClientStatus(note.clientStatus)}
+                        </span>
+                      )}
                     </div>
                     <div className="note-summary">
                       {note.summary || "Sin resumen registrado."}
@@ -213,9 +264,7 @@ function App() {
             {activeNote && (
               <div className="notes-footer">
                 Última nota seleccionada:{" "}
-                <span className="notes-footer-title">
-                  {activeNote.title}
-                </span>
+                <span className="notes-footer-title">{activeNote.title}</span>
               </div>
             )}
           </div>
@@ -289,13 +338,15 @@ function App() {
                         </div>
                         <div className="timeline-meta">
                           <span>
-                            • Responsable Seller:{" "}
-                            <strong>Equipo consultor</strong>
+                            • Responsable cliente:{" "}
+                            <strong>
+                              {note.clientResponsible || "Sin asignar"}
+                            </strong>
                           </span>
                           <span>
-                            • Estado:{" "}
+                            • Estado cliente:{" "}
                             <strong className="status-pill">
-                              En curso
+                              {formatClientStatus(note.clientStatus)}
                             </strong>
                           </span>
                         </div>
@@ -313,4 +364,3 @@ function App() {
 }
 
 export default App;
-
