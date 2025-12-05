@@ -3,6 +3,12 @@ import { supabase } from "./supabaseClient";
 import "./index.css";
 
 function App() {
+  // Detectar si estamos en el portal de clientes
+  const searchParams = new URLSearchParams(window.location.search);
+  const mode = searchParams.get("mode");
+  const isClientPortal =
+    window.location.host.includes("bitacora-client") || mode === "client";
+
   useEffect(() => {
     const testSupabase = async () => {
       const { data, error } = await supabase.from("projects").select("*");
@@ -15,6 +21,7 @@ function App() {
   }, []);
 
   const [selectedProject, setSelectedProject] = useState("Karu");
+
   const [notes, setNotes] = useState([
     {
       id: 1,
@@ -24,7 +31,6 @@ function App() {
       tag: "Kickoff",
       summary:
         "Revisión de objetivos comerciales, definición de tablero de control y stakeholders clave.",
-      // NUEVOS CAMPOS
       clientResponsible: "Dirección Comercial Karu",
       clientStatus: "realizado",
     },
@@ -39,7 +45,7 @@ function App() {
     .filter((n) => n.project === selectedProject)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 
-  // NUEVOS CAMPOS EN EL DRAFT
+  // Draft interno (solo se usará en modo interno)
   const [draft, setDraft] = useState({
     title: "",
     date: new Date().toISOString().slice(0, 10),
@@ -50,6 +56,52 @@ function App() {
   });
 
   const projects = ["Karu", "Everdem", "Salumax", "Labco"];
+
+  // Estado del cliente (para modo portal cliente)
+  const [clientInfo, setClientInfo] = useState(null);
+  const [clientLoading, setClientLoading] = useState(isClientPortal);
+  const [clientError, setClientError] = useState(null);
+
+  // Leer token desde la URL y buscarlo en Supabase
+  useEffect(() => {
+    if (!isClientPortal) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    if (!token) {
+      setClientError(
+        "No encontramos un token en el enlace. Pedí a Seller un nuevo link de acceso."
+      );
+      setClientLoading(false);
+      return;
+    }
+
+    const fetchClient = async () => {
+      setClientLoading(true);
+      const { data, error } = await supabase
+        .from("client_tokens")
+        .select("*")
+        .eq("token", token)
+        .eq("active", true)
+        .single();
+
+      if (error || !data) {
+        console.error("Error buscando token de cliente:", error);
+        setClientError(
+          "Este enlace no es válido o ya no está activo. Contactá con Seller Consulting para obtener uno nuevo."
+        );
+        setClientLoading(false);
+        return;
+      }
+
+      setClientInfo(data);
+      setSelectedProject(data.project_name);
+      setClientLoading(false);
+    };
+
+    fetchClient();
+  }, [isClientPortal]);
 
   const handleCreateNote = () => {
     if (!draft.title.trim()) return;
@@ -84,191 +136,210 @@ function App() {
           <div className="topbar-logo">S</div>
           <div className="topbar-text">
             <span className="topbar-overline">SELLER CONSULTING</span>
-            <span className="topbar-title">Bitácora de proyectos</span>
+            <span className="topbar-title">
+              {isClientPortal ? "Bitácora del proyecto" : "Bitácora de proyectos"}
+            </span>
           </div>
         </div>
         <div className="topbar-right">
-          <select
-            className="project-select"
-            value={selectedProject}
-            onChange={(e) => {
-              setSelectedProject(e.target.value);
-              const first = notes.find((n) => n.project === e.target.value);
-              setActiveNoteId(first ? first.id : undefined);
-            }}
-          >
-            {projects.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <button className="share-button">Compartir vista pública</button>
+          {!isClientPortal && (
+            <>
+              <select
+                className="project-select"
+                value={selectedProject}
+                onChange={(e) => {
+                  setSelectedProject(e.target.value);
+                  const first = notes.find(
+                    (n) => n.project === e.target.value
+                  );
+                  setActiveNoteId(first ? first.id : undefined);
+                }}
+              >
+                {projects.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <button className="share-button">Compartir vista pública</button>
+            </>
+          )}
+          {isClientPortal && clientInfo && (
+            <div className="client-chip">
+              Cliente: <strong>{clientInfo.client_name}</strong>
+            </div>
+          )}
         </div>
       </header>
 
       {/* LAYOUT PRINCIPAL */}
       <main className="layout">
-        {/* COLUMNA IZQUIERDA */}
-        <section className="column column-left">
-          {/* Nueva nota */}
-          <div className="card card-new-note">
-            <div className="card-header">
-              <div>
-                <div className="card-overline">NUEVA NOTA DE SESIÓN</div>
-                <div className="card-subtitle">
-                  Registra acuerdos, próximos pasos y decisiones clave.
+        {/* COLUMNA IZQUIERDA - SOLO INTERNO SELLER */}
+        {!isClientPortal && (
+          <section className="column column-left">
+            {/* Nueva nota */}
+            <div className="card card-new-note">
+              <div className="card-header">
+                <div>
+                  <div className="card-overline">NUEVA NOTA DE SESIÓN</div>
+                  <div className="card-subtitle">
+                    Registra acuerdos, próximos pasos y decisiones clave.
+                  </div>
                 </div>
-              </div>
-              <span className="badge-interno">Interno Seller</span>
-            </div>
-
-            <div className="card-body">
-              <input
-                className="field-input"
-                placeholder="Título de la sesión (ej: Revisión pipeline mensual)"
-                value={draft.title}
-                onChange={(e) =>
-                  setDraft({ ...draft, title: e.target.value })
-                }
-              />
-
-              <div className="field-row">
-                <div className="field-group">
-                  <label className="field-label">Fecha</label>
-                  <input
-                    type="date"
-                    className="field-input"
-                    value={draft.date}
-                    onChange={(e) =>
-                      setDraft({ ...draft, date: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="field-group">
-                  <label className="field-label">Etiqueta</label>
-                  <input
-                    className="field-input"
-                    value={draft.tag}
-                    onChange={(e) =>
-                      setDraft({ ...draft, tag: e.target.value })
-                    }
-                  />
-                </div>
+                <span className="badge-interno">Interno Seller</span>
               </div>
 
-              {/* NUEVA FILA: RESPONSABLE Y ESTADO CLIENTE */}
-              <div className="field-row">
-                <div className="field-group">
-                  <label className="field-label">
-                    Responsable del lado cliente
-                  </label>
-                  <input
-                    className="field-input"
-                    placeholder="Ej: Gerente Comercial, Dirección, etc."
-                    value={draft.clientResponsible}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        clientResponsible: e.target.value,
-                      })
-                    }
-                  />
+              <div className="card-body">
+                <input
+                  className="field-input"
+                  placeholder="Título de la sesión (ej: Revisión pipeline mensual)"
+                  value={draft.title}
+                  onChange={(e) =>
+                    setDraft({ ...draft, title: e.target.value })
+                  }
+                />
+
+                <div className="field-row">
+                  <div className="field-group">
+                    <label className="field-label">Fecha</label>
+                    <input
+                      type="date"
+                      className="field-input"
+                      value={draft.date}
+                      onChange={(e) =>
+                        setDraft({ ...draft, date: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Etiqueta</label>
+                    <input
+                      className="field-input"
+                      value={draft.tag}
+                      onChange={(e) =>
+                        setDraft({ ...draft, tag: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="field-group">
-                  <label className="field-label">Estado compromiso cliente</label>
-                  <select
-                    className="field-input"
-                    value={draft.clientStatus}
-                    onChange={(e) =>
-                      setDraft({ ...draft, clientStatus: e.target.value })
-                    }
-                  >
-                    <option value="realizado">Realizado</option>
-                    <option value="postergado">Postergado</option>
-                    <option value="no_realizado">No realizado</option>
-                  </select>
+
+                {/* Responsable + estado cliente (interno, para registrar compromisos) */}
+                <div className="field-row">
+                  <div className="field-group">
+                    <label className="field-label">
+                      Responsable del lado cliente
+                    </label>
+                    <input
+                      className="field-input"
+                      placeholder="Ej: Gerente Comercial, Dirección, etc."
+                      value={draft.clientResponsible}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          clientResponsible: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">
+                      Estado compromiso cliente
+                    </label>
+                    <select
+                      className="field-input"
+                      value={draft.clientStatus}
+                      onChange={(e) =>
+                        setDraft({ ...draft, clientStatus: e.target.value })
+                      }
+                    >
+                      <option value="realizado">Realizado</option>
+                      <option value="postergado">Postergado</option>
+                      <option value="no_realizado">No realizado</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <textarea
-                className="field-textarea"
-                rows={3}
-                placeholder="Resumen rápido: acuerdos, próximos pasos, decisiones clave, riesgos, compromisos del cliente..."
-                value={draft.summary}
-                onChange={(e) =>
-                  setDraft({ ...draft, summary: e.target.value })
-                }
-              />
+                <textarea
+                  className="field-textarea"
+                  rows={3}
+                  placeholder="Resumen rápido: acuerdos, próximos pasos, decisiones clave, riesgos, compromisos del cliente..."
+                  value={draft.summary}
+                  onChange={(e) =>
+                    setDraft({ ...draft, summary: e.target.value })
+                  }
+                />
 
-              <button
-                className={`primary-button ${
-                  !draft.title.trim() ? "primary-button--disabled" : ""
-                }`}
-                disabled={!draft.title.trim()}
-                onClick={handleCreateNote}
-              >
-                + Guardar nota y actualizar bitácora
-              </button>
-            </div>
-          </div>
-
-          {/* Lista de notas */}
-          <div className="card card-notes-list">
-            <div className="card-header card-header--small">
-              <div className="card-overline">NOTAS DE SESIÓN</div>
-              <div className="card-counter">
-                {projectNotes.length} entradas
+                <button
+                  className={`primary-button ${
+                    !draft.title.trim() ? "primary-button--disabled" : ""
+                  }`}
+                  disabled={!draft.title.trim()}
+                  onClick={handleCreateNote}
+                >
+                  + Guardar nota y actualizar bitácora
+                </button>
               </div>
             </div>
 
-            <div className="notes-list">
-              {projectNotes.length === 0 ? (
-                <div className="notes-empty">
-                  Todavía no hay notas para este proyecto.
+            {/* Lista de notas */}
+            <div className="card card-notes-list">
+              <div className="card-header card-header--small">
+                <div className="card-overline">NOTAS DE SESIÓN</div>
+                <div className="card-counter">
+                  {projectNotes.length} entradas
                 </div>
-              ) : (
-                projectNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    className={`note-item ${
-                      note.id === activeNoteId ? "note-item--active" : ""
-                    }`}
-                    onClick={() => setActiveNoteId(note.id)}
-                  >
-                    <div className="note-item-top">
-                      <div className="note-title">{note.title}</div>
-                      <div className="note-date">
-                        {new Date(note.date).toLocaleDateString("es-PY", {
-                          day: "2-digit",
-                          month: "short",
-                        })}
+              </div>
+
+              <div className="notes-list">
+                {projectNotes.length === 0 ? (
+                  <div className="notes-empty">
+                    Todavía no hay notas para este proyecto.
+                  </div>
+                ) : (
+                  projectNotes.map((note) => (
+                    <div
+                      key={note.id}
+                      className={`note-item ${
+                        note.id === activeNoteId ? "note-item--active" : ""
+                      }`}
+                      onClick={() => setActiveNoteId(note.id)}
+                    >
+                      <div className="note-item-top">
+                        <div className="note-title">{note.title}</div>
+                        <div className="note-date">
+                          {new Date(note.date).toLocaleDateString("es-PY", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </div>
+                      </div>
+                      <div className="note-tags">
+                        <span className="tag">{note.tag}</span>
+                        {note.clientStatus && (
+                          <span className="tag tag--status">
+                            {formatClientStatus(note.clientStatus)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="note-summary">
+                        {note.summary || "Sin resumen registrado."}
                       </div>
                     </div>
-                    <div className="note-tags">
-                      <span className="tag">{note.tag}</span>
-                      {note.clientStatus && (
-                        <span className="tag tag--status">
-                          {formatClientStatus(note.clientStatus)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="note-summary">
-                      {note.summary || "Sin resumen registrado."}
-                    </div>
-                  </div>
-                ))
+                  ))
+                )}
+              </div>
+
+              {activeNote && (
+                <div className="notes-footer">
+                  Última nota seleccionada:{" "}
+                  <span className="notes-footer-title">
+                    {activeNote.title}
+                  </span>
+                </div>
               )}
             </div>
-
-            {activeNote && (
-              <div className="notes-footer">
-                Última nota seleccionada:{" "}
-                <span className="notes-footer-title">{activeNote.title}</span>
-              </div>
-            )}
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* COLUMNA DERECHA - VISTA CLIENTE */}
         <section className="column column-right">
@@ -276,14 +347,16 @@ function App() {
           <div className="card card-project-summary">
             <div className="summary-header">
               <div>
-                <div className="card-overline">VISTA DEL PROYECTO</div>
+                <div className="card-overline">
+                  {isClientPortal ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}
+                </div>
                 <h1 className="project-title">
                   Bitácora de {selectedProject}
                 </h1>
                 <p className="project-description">
-                  Línea de tiempo viva con los hitos, acuerdos y avances de
-                  consultoría. Esta vista es la que podrías compartir con el
-                  cliente como resumen ejecutivo del proyecto.
+                  {isClientPortal
+                    ? "Esta es la vista ejecutiva de la bitácora de consultoría para tu empresa. Aquí verás los principales hitos, acuerdos y avances del proyecto."
+                    : "Línea de tiempo viva con los hitos, acuerdos y avances de consultoría. Esta vista es la que podrías compartir con el cliente como resumen ejecutivo del proyecto."}
                 </p>
               </div>
               <div className="summary-metrics">
@@ -303,58 +376,82 @@ function App() {
 
           {/* Timeline */}
           <div className="card card-timeline">
-            {projectNotes.length === 0 ? (
+            {isClientPortal && clientLoading && (
               <div className="timeline-empty">
-                Todavía no hay eventos en la bitácora de este proyecto.
+                Validando tu acceso como cliente...
               </div>
-            ) : (
-              <ol className="timeline">
-                {projectNotes.map((note, index) => (
-                  <li key={note.id} className="timeline-item">
-                    <div className="timeline-point" />
-                    <div className="timeline-content">
-                      <div className="timeline-header">
-                        <div className="timeline-date">
-                          {new Date(note.date).toLocaleDateString("es-PY", {
-                            weekday: "short",
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
+            )}
+
+            {isClientPortal && !clientLoading && clientError && (
+              <div className="timeline-empty">
+                {clientError}
+                <br />
+                <br />
+                <span className="timeline-help">
+                  Si el problema persiste, escribinos a{" "}
+                  <strong>ml@seller.consulting</strong>.
+                </span>
+              </div>
+            )}
+
+            {(!isClientPortal || (!clientLoading && !clientError)) && (
+              <>
+                {projectNotes.length === 0 ? (
+                  <div className="timeline-empty">
+                    Todavía no hay eventos en la bitácora de este proyecto.
+                  </div>
+                ) : (
+                  <ol className="timeline">
+                    {projectNotes.map((note, index) => (
+                      <li key={note.id} className="timeline-item">
+                        <div className="timeline-point" />
+                        <div className="timeline-content">
+                          <div className="timeline-header">
+                            <div className="timeline-date">
+                              {new Date(note.date).toLocaleDateString("es-PY", {
+                                weekday: "short",
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </div>
+                            <div className="timeline-badges">
+                              <span className="timeline-badge">
+                                Sesión #{projectNotes.length - index}
+                              </span>
+                              <span className="timeline-badge timeline-badge--blue">
+                                {note.tag}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="timeline-card">
+                            <div className="timeline-title">
+                              {note.title}
+                            </div>
+                            <div className="timeline-summary">
+                              {note.summary}
+                            </div>
+                            <div className="timeline-meta">
+                              <span>
+                                • Responsable cliente:{" "}
+                                <strong>
+                                  {note.clientResponsible || "Sin asignar"}
+                                </strong>
+                              </span>
+                              <span>
+                                • Estado cliente:{" "}
+                                <strong className="status-pill">
+                                  {formatClientStatus(note.clientStatus)}
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="timeline-badges">
-                          <span className="timeline-badge">
-                            Sesión #{projectNotes.length - index}
-                          </span>
-                          <span className="timeline-badge timeline-badge--blue">
-                            {note.tag}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="timeline-card">
-                        <div className="timeline-title">{note.title}</div>
-                        <div className="timeline-summary">
-                          {note.summary}
-                        </div>
-                        <div className="timeline-meta">
-                          <span>
-                            • Responsable cliente:{" "}
-                            <strong>
-                              {note.clientResponsible || "Sin asignar"}
-                            </strong>
-                          </span>
-                          <span>
-                            • Estado cliente:{" "}
-                            <strong className="status-pill">
-                              {formatClientStatus(note.clientStatus)}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </>
             )}
           </div>
         </section>
