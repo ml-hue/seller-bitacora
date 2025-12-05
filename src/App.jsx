@@ -2,6 +2,30 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import "./index.css";
 
+const PHASES = [
+  { id: 1, label: "Diagnóstico" },
+  { id: 2, label: "Plan estratégico" },
+  { id: 3, label: "Implementación" },
+  { id: 4, label: "Seguimiento & control" },
+];
+const getPhaseStatus = (phaseId, currentPhase) => {
+  if (!currentPhase) return "pending";
+  if (phaseId < currentPhase) return "done";
+  if (phaseId === currentPhase) return "current";
+  return "pending";
+};
+
+const getPhaseStatusLabel = (status) => {
+  switch (status) {
+    case "done":
+      return "Completada";
+    case "current":
+      return "En curso";
+    default:
+      return "Pendiente";
+  }
+};
+
 function App() {
   // Detectar si estamos en el portal de clientes
   const searchParams = new URLSearchParams(window.location.search);
@@ -19,8 +43,35 @@ function App() {
 
     testSupabase();
   }, []);
+  useEffect(() => {
+  const loadPhase = async () => {
+    if (!selectedProject) return;
+
+    try {
+      setPhaseLoading(true);
+      const { data, error } = await supabase
+        .from("project_phase")
+        .select("current_phase")
+        .eq("project_name", selectedProject)
+        .single();
+
+      if (error) {
+        console.error("Error cargando fase del proyecto:", error);
+        setProjectPhase(null);
+      } else {
+        setProjectPhase(data?.current_phase ?? null);
+      }
+    } finally {
+      setPhaseLoading(false);
+    }
+  };
+
+  loadPhase();
+}, [selectedProject]);
 
   const [selectedProject, setSelectedProject] = useState("Karu");
+const [projectPhase, setProjectPhase] = useState(null);
+const [phaseLoading, setPhaseLoading] = useState(true);
 
   const [notes, setNotes] = useState([
     {
@@ -127,7 +178,28 @@ function App() {
     if (status === "postergado") return "Postergado";
     return "No realizado";
   };
+  const getPhaseStatus = (phaseId) => {
+    if (!projectPhase) return "pending";
 
+    if (phaseId < projectPhase) return "done";
+    if (phaseId === projectPhase) return "current";
+    return "upcoming";
+  };
+
+  const getPhaseStatusLabel = (status) => {
+    switch (status) {
+      case "done":
+        return "Completada";
+      case "current":
+        return "En curso";
+      case "upcoming":
+        return "Próxima fase";
+      case "pending":
+      default:
+        return "Pendiente";
+    }
+  };
+  
   return (
     <div className="app-root">
       {/* TOP BAR */}
@@ -374,6 +446,74 @@ function App() {
             </div>
           </div>
 
+          {/* Roadmap de fases - solo modo cliente */}
+{isClientPortal && (
+  <div className="card card-phase-roadmap">
+    <div className="phase-header">
+      <div>
+        <div className="card-overline">AVANCE DEL PROYECTO</div>
+        <h2 className="phase-title">
+          Fase actual:{" "}
+          <span>
+            {PHASES.find((p) => p.id === projectPhase)?.label ?? "Configurando..."}
+          </span>
+        </h2>
+        <p className="phase-subtitle">
+          Visualiza en qué etapa del proceso de consultoría se encuentra tu proyecto.
+        </p>
+      </div>
+
+      <div className="phase-meta">
+        <div className="phase-pill">
+          {phaseLoading ? (
+            <span>Cargando...</span>
+          ) : (
+            <>
+              <span className="phase-pill-number">{projectPhase ?? "-"}</span>
+              <span className="phase-pill-text">de {PHASES.length} fases</span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+
+    <div className="phase-steps">
+      {PHASES.map((phase, index) => {
+        const status = getPhaseStatus(phase.id);
+        const isLast = index === PHASES.length - 1;
+
+        return (
+          <div key={phase.id} className="phase-step">
+            <div className="phase-step-top">
+              <div className={`phase-dot phase-dot--${status}`}>
+                {phase.id}
+              </div>
+
+              {!isLast && (
+                <div className={`phase-connector phase-connector--${status}`} />
+              )}
+            </div>
+
+            <div className="phase-step-info">
+              <div className="phase-step-label">{phase.label}</div>
+              <div className={`phase-status-badge phase-status-badge--${status}`}>
+                {getPhaseStatusLabel(status)}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {!phaseLoading && projectPhase && (
+      <p className="phase-footer">
+        Ahora estamos trabajando en la fase de{" "}
+        <strong>{PHASES.find((p) => p.id === projectPhase)?.label}</strong>,
+        siguiendo el roadmap definido para tu proyecto.
+      </p>
+    )}
+  </div>
+)}
           {/* Timeline */}
           <div className="card card-timeline">
             {isClientPortal && clientLoading && (
