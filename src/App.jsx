@@ -8,70 +8,23 @@ const PHASES = [
   { id: 3, label: "Implementación" },
   { id: 4, label: "Seguimiento & control" },
 ];
-const getPhaseStatus = (phaseId, currentPhase) => {
-  if (!currentPhase) return "pending";
-  if (phaseId < currentPhase) return "done";
-  if (phaseId === currentPhase) return "current";
-  return "pending";
-};
-
-const getPhaseStatusLabel = (status) => {
-  switch (status) {
-    case "done":
-      return "Completada";
-    case "current":
-      return "En curso";
-    default:
-      return "Pendiente";
-  }
-};
 
 function App() {
-  // Detectar si estamos en el portal de clientes
+  // -------------------------------------------------------------
+  // 🟦 CONSTANTS AND MODE DETECTION
+  // -------------------------------------------------------------
   const searchParams = new URLSearchParams(window.location.search);
   const mode = searchParams.get("mode");
   const isClientPortal =
     window.location.host.includes("bitacora-client") || mode === "client";
+  const projects = ["Karu", "Everdem", "Salumax", "Labco"];
 
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase.from("projects").select("*");
-
-      console.log("Supabase projects:", data);
-      if (error) console.error("Supabase ERROR:", error);
-    };
-
-    testSupabase();
-  }, []);
-  useEffect(() => {
-  const loadPhase = async () => {
-    if (!selectedProject) return;
-
-    try {
-      setPhaseLoading(true);
-      const { data, error } = await supabase
-        .from("project_phase")
-        .select("current_phase")
-        .eq("project_name", selectedProject)
-        .single();
-
-      if (error) {
-        console.error("Error cargando fase del proyecto:", error);
-        setProjectPhase(null);
-      } else {
-        setProjectPhase(data?.current_phase ?? null);
-      }
-    } finally {
-      setPhaseLoading(false);
-    }
-  };
-
-  loadPhase();
-}, [selectedProject]);
-
+  // -------------------------------------------------------------
+  // 🟦 STATE DECLARATIONS
+  // -------------------------------------------------------------
   const [selectedProject, setSelectedProject] = useState("Karu");
-const [projectPhase, setProjectPhase] = useState(null);
-const [phaseLoading, setPhaseLoading] = useState(true);
+  const [projectPhase, setProjectPhase] = useState(null);
+  const [phaseLoading, setPhaseLoading] = useState(true);
 
   const [notes, setNotes] = useState([
     {
@@ -88,15 +41,8 @@ const [phaseLoading, setPhaseLoading] = useState(true);
   ]);
 
   const [activeNoteId, setActiveNoteId] = useState(1);
-  const activeNote = notes.find(
-    (n) => n.id === activeNoteId && n.project === selectedProject
-  );
 
-  const projectNotes = notes
-    .filter((n) => n.project === selectedProject)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  // Draft interno (solo se usará en modo interno)
+  // Estado de redacción interna
   const [draft, setDraft] = useState({
     title: "",
     date: new Date().toISOString().slice(0, 10),
@@ -106,14 +52,65 @@ const [phaseLoading, setPhaseLoading] = useState(true);
     clientStatus: "postergado",
   });
 
-  const projects = ["Karu", "Everdem", "Salumax", "Labco"];
-
-  // Estado del cliente (para modo portal cliente)
+  // Estado del cliente
   const [clientInfo, setClientInfo] = useState(null);
   const [clientLoading, setClientLoading] = useState(isClientPortal);
   const [clientError, setClientError] = useState(null);
 
-  // Leer token desde la URL y buscarlo en Supabase
+  // -------------------------------------------------------------
+  // 🟦 DERIVED STATE
+  // -------------------------------------------------------------
+  const projectNotes = notes
+    .filter((n) => n.project === selectedProject)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  const activeNote = notes.find((n) => n.id === activeNoteId);
+
+  // -------------------------------------------------------------
+  // 🟦 useEffect: Test de conexión Supabase
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const testSupabase = async () => {
+      const { data, error } = await supabase.from("projects").select("*");
+      console.log("Supabase projects:", data);
+      if (error) console.error("Supabase ERROR:", error);
+    };
+
+    testSupabase();
+  }, []);
+
+  // -------------------------------------------------------------
+  // 🟦 useEffect: Cargar fase actual del proyecto
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    const loadPhase = async () => {
+      try {
+        setPhaseLoading(true);
+        const { data, error } = await supabase
+          .from("project_phase")
+          .select("current_phase")
+          .eq("project_name", selectedProject)
+          .single();
+
+        if (error) {
+          console.error("Error cargando fase del proyecto:", error);
+          setProjectPhase(null);
+        } else {
+          setProjectPhase(data?.current_phase ?? null);
+        }
+      } finally {
+        setPhaseLoading(false);
+      }
+    };
+
+    loadPhase();
+  }, [selectedProject]);
+
+  // -------------------------------------------------------------
+  // 🟦 useEffect: Validar token del cliente
+  // -------------------------------------------------------------
   useEffect(() => {
     if (!isClientPortal) return;
 
@@ -154,6 +151,36 @@ const [phaseLoading, setPhaseLoading] = useState(true);
     fetchClient();
   }, [isClientPortal]);
 
+  // -------------------------------------------------------------
+  // 🟦 HELPER FUNCTIONS
+  // -------------------------------------------------------------
+  const getPhaseStatus = (phaseId) => {
+    if (!projectPhase) return "pending";
+    if (phaseId < projectPhase) return "done";
+    if (phaseId === projectPhase) return "current";
+    return "upcoming";
+  };
+
+  const getPhaseStatusLabel = (status) => {
+    switch (status) {
+      case "done":
+        return "Completada";
+      case "current":
+        return "En curso";
+      case "upcoming":
+        return "Próxima fase";
+      case "pending":
+      default:
+        return "Pendiente";
+    }
+  };
+
+  const formatClientStatus = (status) => {
+    if (status === "realizado") return "Realizado";
+    if (status === "postergado") return "Postergado";
+    return "No realizado";
+  };
+
   const handleCreateNote = () => {
     if (!draft.title.trim()) return;
     const newNote = {
@@ -173,33 +200,9 @@ const [phaseLoading, setPhaseLoading] = useState(true);
     });
   };
 
-  const formatClientStatus = (status) => {
-    if (status === "realizado") return "Realizado";
-    if (status === "postergado") return "Postergado";
-    return "No realizado";
-  };
-  const getPhaseStatus = (phaseId) => {
-    if (!projectPhase) return "pending";
-
-    if (phaseId < projectPhase) return "done";
-    if (phaseId === projectPhase) return "current";
-    return "upcoming";
-  };
-
-  const getPhaseStatusLabel = (status) => {
-    switch (status) {
-      case "done":
-        return "Completada";
-      case "current":
-        return "En curso";
-      case "upcoming":
-        return "Próxima fase";
-      case "pending":
-      default:
-        return "Pendiente";
-    }
-  };
-  
+  // -------------------------------------------------------------
+  // 🟦 RENDER
+  // -------------------------------------------------------------
   return (
     <div className="app-root">
       {/* TOP BAR */}
@@ -447,73 +450,74 @@ const [phaseLoading, setPhaseLoading] = useState(true);
           </div>
 
           {/* Roadmap de fases - solo modo cliente */}
-{isClientPortal && (
-  <div className="card card-phase-roadmap">
-    <div className="phase-header">
-      <div>
-        <div className="card-overline">AVANCE DEL PROYECTO</div>
-        <h2 className="phase-title">
-          Fase actual:{" "}
-          <span>
-            {PHASES.find((p) => p.id === projectPhase)?.label ?? "Configurando..."}
-          </span>
-        </h2>
-        <p className="phase-subtitle">
-          Visualiza en qué etapa del proceso de consultoría se encuentra tu proyecto.
-        </p>
-      </div>
+          {isClientPortal && (
+            <div className="card card-phase-roadmap">
+              <div className="phase-header">
+                <div>
+                  <div className="card-overline">AVANCE DEL PROYECTO</div>
+                  <h2 className="phase-title">
+                    Fase actual:{" "}
+                    <span>
+                      {PHASES.find((p) => p.id === projectPhase)?.label ?? "Configurando..."}
+                    </span>
+                  </h2>
+                  <p className="phase-subtitle">
+                    Visualiza en qué etapa del proceso de consultoría se encuentra tu proyecto.
+                  </p>
+                </div>
 
-      <div className="phase-meta">
-        <div className="phase-pill">
-          {phaseLoading ? (
-            <span>Cargando...</span>
-          ) : (
-            <>
-              <span className="phase-pill-number">{projectPhase ?? "-"}</span>
-              <span className="phase-pill-text">de {PHASES.length} fases</span>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-
-    <div className="phase-steps">
-      {PHASES.map((phase, index) => {
-        const status = getPhaseStatus(phase.id);
-        const isLast = index === PHASES.length - 1;
-
-        return (
-          <div key={phase.id} className="phase-step">
-            <div className="phase-step-top">
-              <div className={`phase-dot phase-dot--${status}`}>
-                {phase.id}
+                <div className="phase-meta">
+                  <div className="phase-pill">
+                    {phaseLoading ? (
+                      <span>Cargando...</span>
+                    ) : (
+                      <>
+                        <span className="phase-pill-number">{projectPhase ?? "-"}</span>
+                        <span className="phase-pill-text">de {PHASES.length} fases</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {!isLast && (
-                <div className={`phase-connector phase-connector--${status}`} />
+              <div className="phase-steps">
+                {PHASES.map((phase, index) => {
+                  const status = getPhaseStatus(phase.id);
+                  const isLast = index === PHASES.length - 1;
+
+                  return (
+                    <div key={phase.id} className="phase-step">
+                      <div className="phase-step-top">
+                        <div className={`phase-dot phase-dot--${status}`}>
+                          {phase.id}
+                        </div>
+
+                        {!isLast && (
+                          <div className={`phase-connector phase-connector--${status}`} />
+                        )}
+                      </div>
+
+                      <div className="phase-step-info">
+                        <div className="phase-step-label">{phase.label}</div>
+                        <div className={`phase-status-badge phase-status-badge--${status}`}>
+                          {getPhaseStatusLabel(status)}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!phaseLoading && projectPhase && (
+                <p className="phase-footer">
+                  Ahora estamos trabajando en la fase de{" "}
+                  <strong>{PHASES.find((p) => p.id === projectPhase)?.label}</strong>,
+                  siguiendo el roadmap definido para tu proyecto.
+                </p>
               )}
             </div>
+          )}
 
-            <div className="phase-step-info">
-              <div className="phase-step-label">{phase.label}</div>
-              <div className={`phase-status-badge phase-status-badge--${status}`}>
-                {getPhaseStatusLabel(status)}
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-
-    {!phaseLoading && projectPhase && (
-      <p className="phase-footer">
-        Ahora estamos trabajando en la fase de{" "}
-        <strong>{PHASES.find((p) => p.id === projectPhase)?.label}</strong>,
-        siguiendo el roadmap definido para tu proyecto.
-      </p>
-    )}
-  </div>
-)}
           {/* Timeline */}
           <div className="card card-timeline">
             {isClientPortal && clientLoading && (
