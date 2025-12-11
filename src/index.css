@@ -601,3 +601,407 @@ body::before {
 .card-timeline:hover {
   border-color: rgba(96, 165, 250, 0.45);
 }
+/* === Roadmap de fases (portal cliente) === */
+
+.card-phase-roadmap {
+  margin-top: 1.75rem;
+  margin-bottom: 1.75rem;
+  padding: 1.5rem 1.75rem;
+  border-radius: 18px;
+  background: radial-gradient(circle at top left, #1b2a3b 0, #050815 55%, #050814 100%);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(135, 206, 250, 0.2);
+}
+
+.phase-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.phase-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e4f2ff;
+  margin: 0.35rem 0;
+}
+
+.phase-title span {
+  color: #8be4ff;
+}
+
+.phase-subtitle {
+  font-size: 0.9rem;
+  color: #9fb3c9;
+  margin: 0;
+}
+
+.phase-meta {
+  display: flex;
+  align-items: center;
+}
+
+.phase-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.22);
+  border: 1px solid rgba(45, 212, 191, 0.4);
+  font-size: 0.75rem;
+  color: #ccfbf1;
+}
+
+.phase-pill-number {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.phase-pill-text {
+  opacity: 0.9;
+}
+
+/* Steps */
+
+.phase-steps {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.phase-step {
+  flex: 1;
+  position: relative;
+}
+
+.phase-step-top {
+  display: flex;
+  align-items: center;
+}
+
+.phase-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 2px solid #1f2937;
+  background: #0b1120;
+  color: #6b7280;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8);
+}
+
+.phase-dot--done {
+  background: radial-gradient(circle at 30% 0, #22c55e, #15803d 55%, #052e16 100%);
+  border-color: #4ade80;
+  color: #ecfdf3;
+}
+
+.phase-dot--current {
+  background: radial-gradient(circle at 30% 0, #38bdf8, #0ea5e9 55%, #082f49 100%);
+  border-color: #7dd3fc;
+  color: #e0f2fe;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.6);
+}
+
+.phase-dot--pending {
+  background: #020617;
+  border-color: #111827;
+  color: #4b5563;
+}
+
+.phase-connector {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  margin-left: 0.5rem;
+  background: linear-gradient(to right, rgba(55, 65, 81, 0.6), rgba(31, 41, 55, 0.4));
+}
+
+.phase-connector--done {
+  background: linear-gradient(to right, #22c55e, #4ade80);
+}
+
+.phase-connector--current {
+  background: linear-gradient(to right, #38bdf8, rgba(56, 189, 248, 0.25));
+}
+
+.phase-connector--pending {
+  background: linear-gradient(to right, rgba(31, 41, 55, 0.6), rgba(15, 23, 42, 0.2));
+}
+
+.phase-step-info {
+  margin-top: 0.55rem;
+}
+
+.phase-step-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #e5e7eb;
+  margin-bottom: 0.25rem;
+}
+
+.phase-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.phase-status-badge--done {
+  background: rgba(22, 163, 74, 0.16);
+  color: #bbf7d0;
+}
+
+.phase-status-badge--current {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+}
+
+.phase-status-badge--pending {
+  background: rgba(31, 41, 55, 0.7);
+  color: #9ca3af;
+}
+
+.phase-footer {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.phase-footer strong {
+  color: #e5e7eb;
+}
+/* -------------------------------------------------------------
+   ROADMAP CURVO - SELLER CONSULTING (A3-A VERSION FINAL)
+--------------------------------------------------------------*/
+
+.card-phase-roadmap--curved {
+  background: #0d0f1a;
+  border-radius: 20px;
+  padding: 32px;
+  margin-top: 24px;
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.35);
+}
+
+.phase-header--curved .phase-title span {
+  color: #4fe3c1;
+  font-weight: 700;
+}
+
+.phase-curve-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-top: 32px;
+}
+
+.phase-curve-svg {
+  width: 100%;
+  height: 240px;
+}
+
+.phase-curve-path {
+  stroke: #4fe3c1;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+/* ------- MARKERS -------- */
+
+.phase-marker {
+  cursor: default;
+}
+
+.phase-marker-ring {
+  fill: #0d0f1a;
+  stroke-width: 3;
+}
+
+.phase-marker-dot {
+  fill: #4fe3c1;
+}
+
+.phase-marker-index {
+  font-size: 14px;
+  fill: #fff;
+  font-weight: 600;
+}
+
+.phase-marker-label {
+  font-size: 13px;
+  fill: #c7d4e0;
+  font-weight: 500;
+}
+
+/* ------- ESTADOS DE FASE -------- */
+
+.phase-marker--done .phase-marker-ring {
+  stroke: #4fe3c1;
+  opacity: 0.9;
+}
+
+.phase-marker--current .phase-marker-ring {
+  stroke: #fff;
+  opacity: 1;
+}
+
+.phase-marker--pending .phase-marker-ring,
+.phase-marker--upcoming .phase-marker-ring {
+  stroke: #3a3f4d;
+  opacity: 0.4;
+}
+
+.phase-marker--pending .phase-marker-dot,
+.phase-marker--upcoming .phase-marker-dot {
+  fill: #3a3f4d;
+}
+
+/* ------- LEYENDA -------- */
+
+.phase-legend {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.phase-legend-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #11141f;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  align-items: center;
+}
+
+.phase-legend-item--done {
+  border-color: #4fe3c1;
+}
+
+.phase-legend-item--current {
+  border-color: #ffffff;
+}
+
+.phase-legend-item--pending,
+.phase-legend-item--upcoming {
+  opacity: 0.45;
+}
+
+.phase-legend-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.phase-legend-index {
+  background: #4fe3c1;
+  color: #0d0f1a;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.phase-legend-title {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.phase-legend-status {
+  font-size: 13px;
+  color: #c7d4e0;
+}
+.manual-phase-control {
+  background: #0e1326;
+  border: 1px solid #1a233a;
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+
+.manual-phase-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #fff;
+}
+
+.manual-phase-description {
+  color: #b9c2d3;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.manual-phase-grid {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.manual-phase-card {
+  cursor: pointer;
+  flex: 1;
+  background: #141b33;
+  border: 1px solid #1d2947;
+  padding: 14px 10px;
+  border-radius: 10px;
+  text-align: center;
+  transition: 0.2s;
+}
+
+.manual-phase-card:hover {
+  background: #1c2640;
+}
+
+.manual-phase-card.selected {
+  background: #0141ff;
+  border-color: #3f5cff;
+  box-shadow: 0 0 10px rgba(0, 86, 255, 0.5);
+}
+
+.manual-phase-number {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.manual-phase-label {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #dce2f0;
+}
+
+.manual-phase-save {
+  width: 100%;
+  background: #0d6efd;
+  padding: 12px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.manual-phase-save:hover {
+  background: #0b5ed7;
+}
+
+.manual-phase-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
