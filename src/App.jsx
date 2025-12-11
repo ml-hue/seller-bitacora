@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "./supabaseClient";
 import "./index.css";
 
+/* -------------------------------------------------------------
+   FASES Y POSICIONES DEL ROADMAP CURVO
+------------------------------------------------------------- */
 const PHASES = [
   { id: 1, label: "Diagnóstico" },
   { id: 2, label: "Plan estratégico" },
@@ -9,40 +12,38 @@ const PHASES = [
   { id: 4, label: "Seguimiento & control" },
 ];
 
+const PHASE_MARKERS = [
+  { id: 1, x: 80, y: 150 },
+  { id: 2, x: 320, y: 110 },
+  { id: 3, x: 620, y: 160 },
+  { id: 4, x: 880, y: 120 },
+];
+
 function App() {
-  // -------------------------------------------------------------
-  // 🟦 CONSTANTS AND MODE DETECTION
-  // -------------------------------------------------------------
+  /* -------------------------------------------------------------
+     MODO CLIENTE / MODO INTERNO
+  ------------------------------------------------------------- */
   const searchParams = new URLSearchParams(window.location.search);
   const mode = searchParams.get("mode");
   const isClientPortal =
     window.location.host.includes("bitacora-client") || mode === "client";
-  const projects = ["Karu", "Everdem", "Salumax", "Labco"];
 
-  // -------------------------------------------------------------
-  // 🟦 STATE DECLARATIONS
-  // -------------------------------------------------------------
-  const [selectedProject, setSelectedProject] = useState("Karu");
+  /* -------------------------------------------------------------
+     ESTADOS PRINCIPALES
+  ------------------------------------------------------------- */
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [projectPhase, setProjectPhase] = useState(null);
   const [phaseLoading, setPhaseLoading] = useState(true);
 
-  const [notes, setNotes] = useState([
-    {
-      id: 1,
-      project: "Karu",
-      title: "Kickoff y diagnóstico inicial",
-      date: "2025-01-14",
-      tag: "Kickoff",
-      summary:
-        "Revisión de objetivos comerciales, definición de tablero de control y stakeholders clave.",
-      clientResponsible: "Dirección Comercial Karu",
-      clientStatus: "realizado",
-    },
-  ]);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState(null);
 
-  const [activeNoteId, setActiveNoteId] = useState(1);
+  const [activeSessionId, setActiveSessionId] = useState(null);
 
-  // Estado de redacción interna
+  /* BORRADOR NUEVA SESIÓN */
   const [draft, setDraft] = useState({
     title: "",
     date: new Date().toISOString().slice(0, 10),
@@ -52,65 +53,155 @@ function App() {
     clientStatus: "postergado",
   });
 
-  // Estado del cliente
+  const [savingSession, setSavingSession] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  /* PORTAL CLIENTE */
   const [clientInfo, setClientInfo] = useState(null);
   const [clientLoading, setClientLoading] = useState(isClientPortal);
   const [clientError, setClientError] = useState(null);
 
-  // -------------------------------------------------------------
-  // 🟦 DERIVED STATE
-  // -------------------------------------------------------------
-  const projectNotes = notes
-    .filter((n) => n.project === selectedProject)
-    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  /* CONTROL MANUAL DE FASE */
+  const [manualPhase, setManualPhase] = useState(null);
+  const [savingPhase, setSavingPhase] = useState(false);
+  const [phaseError, setPhaseError] = useState(null);
 
-  const activeNote = notes.find((n) => n.id === activeNoteId);
+  /* -------------------------------------------------------------
+     ESTADO DERIVADO CON USEMEMO (PERFORMANCE)
+  ------------------------------------------------------------- */
+  const projectSessions = useMemo(() => {
+    return sessions.sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [sessions]);
 
-  // -------------------------------------------------------------
-  // 🟦 useEffect: Test de conexión Supabase
-  // -------------------------------------------------------------
-  useEffect(() => {
-    const testSupabase = async () => {
-      const { data, error } = await supabase.from("projects").select("*");
-      console.log("Supabase projects:", data);
-      if (error) console.error("Supabase ERROR:", error);
-    };
+  const activeSession = useMemo(() => {
+    return sessions.find((s) => s.id === activeSessionId);
+  }, [sessions, activeSessionId]);
 
-    testSupabase();
-  }, []);
+  /* -------------------------------------------------------------
+     CARGAR PROYECTOS
+  ------------------------------------------------------------- */
+  const loadProjects = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, client_name")
+        .order("name");
 
-  // -------------------------------------------------------------
-  // 🟦 useEffect: Cargar fase actual del proyecto
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (!selectedProject) return;
+      if (error) throw error;
 
-    const loadPhase = async () => {
-      try {
-        setPhaseLoading(true);
-        const { data, error } = await supabase
-          .from("project_phase")
-          .select("current_phase")
-          .eq("project_name", selectedProject)
-          .single();
-
-        if (error) {
-          console.error("Error cargando fase del proyecto:", error);
-          setProjectPhase(null);
-        } else {
-          setProjectPhase(data?.current_phase ?? null);
-        }
-      } finally {
-        setPhaseLoading(false);
+      setProjects(data || []);
+      
+      // Seleccionar primer proyecto por defecto
+      if (data && data.length > 0 && !selectedProject) {
+        setSelectedProject(data[0].name);
+        setSelectedProjectId(data[0].id);
       }
-    };
-
-    loadPhase();
+    } catch (error) {
+      console.error("Error cargando proyectos:", error);
+    }
   }, [selectedProject]);
 
-  // -------------------------------------------------------------
-  // 🟦 useEffect: Validar token del cliente
-  // -------------------------------------------------------------
+  /* -------------------------------------------------------------
+     CARGAR SESIONES DESDE SUPABASE
+  ------------------------------------------------------------- */
+  const loadSessions = useCallback(async (projectId) => {
+    if (!projectId) return;
+
+    try {
+      setSessionsLoading(true);
+      setSessionsError(null);
+
+      const { data, error } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      setSessions(data || []);
+      if (data && data.length > 0) {
+        setActiveSessionId(data[0].id);
+      } else {
+        setActiveSessionId(null);
+      }
+    } catch (error) {
+      console.error("Error cargando sesiones:", error);
+      setSessionsError("No pudimos cargar las sesiones. Intentá de nuevo.");
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  /* -------------------------------------------------------------
+     CARGAR FASE ACTUAL
+  ------------------------------------------------------------- */
+  const loadPhase = useCallback(async (projectName) => {
+    if (!projectName) return;
+
+    try {
+      setPhaseLoading(true);
+      setPhaseError(null);
+
+      const { data, error } = await supabase
+        .from("project_phase")
+        .select("current_phase")
+        .eq("project_name", projectName)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      if (data) {
+        setProjectPhase(data.current_phase ?? 1);
+        setManualPhase(data.current_phase ?? 1);
+      } else {
+        // Si no existe, crear registro con fase 1
+        const { data: newPhase, error: insertError } = await supabase
+          .from("project_phase")
+          .insert([{ 
+            project_name: projectName, 
+            current_phase: 1 
+          }])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        setProjectPhase(1);
+        setManualPhase(1);
+      }
+    } catch (error) {
+      console.error("Error cargando fase:", error);
+      setPhaseError("Error cargando la fase del proyecto");
+      setProjectPhase(1);
+      setManualPhase(1);
+    } finally {
+      setPhaseLoading(false);
+    }
+  }, []);
+
+  /* -------------------------------------------------------------
+     EFECTOS Y CARGA INICIAL
+  ------------------------------------------------------------- */
+
+  // Cargar proyectos al inicio (solo modo interno)
+  useEffect(() => {
+    if (!isClientPortal) {
+      loadProjects();
+    }
+  }, [isClientPortal, loadProjects]);
+
+  // Cargar sesiones y fase cuando cambia el proyecto
+  useEffect(() => {
+    if (selectedProjectId && selectedProject) {
+      loadSessions(selectedProjectId);
+      loadPhase(selectedProject);
+    }
+  }, [selectedProjectId, selectedProject, loadSessions, loadPhase]);
+
+  // Validar token cliente con seguridad mejorada
   useEffect(() => {
     if (!isClientPortal) return;
 
@@ -118,42 +209,68 @@ function App() {
     const token = params.get("token");
 
     if (!token) {
-      setClientError(
-        "No encontramos un token en el enlace. Pedí a Seller un nuevo link de acceso."
-      );
+      setClientError("No encontramos un token válido.");
       setClientLoading(false);
       return;
     }
 
     const fetchClient = async () => {
-      setClientLoading(true);
-      const { data, error } = await supabase
-        .from("client_tokens")
-        .select("*")
-        .eq("token", token)
-        .eq("active", true)
-        .single();
+      try {
+        setClientLoading(true);
 
-      if (error || !data) {
-        console.error("Error buscando token de cliente:", error);
-        setClientError(
-          "Este enlace no es válido o ya no está activo. Contactá con Seller Consulting para obtener uno nuevo."
-        );
+        const { data, error } = await supabase
+          .from("client_tokens")
+          .select("*")
+          .eq("token", token)
+          .eq("active", true)
+          .single();
+
+        if (!data || error) {
+          setClientError(
+            "El enlace expiró o no es válido. Solicitá un nuevo acceso."
+          );
+          setClientLoading(false);
+          return;
+        }
+
+        // Verificar expiración del token
+        if (data.expires_at) {
+          const expiresAt = new Date(data.expires_at);
+          if (expiresAt < new Date()) {
+            setClientError("Este enlace ha expirado. Solicitá uno nuevo.");
+            setClientLoading(false);
+            return;
+          }
+        }
+
+        setClientInfo(data);
+        setSelectedProject(data.project_name);
+
+        // Obtener el project_id del nombre
+        const { data: projectData } = await supabase
+          .from("projects")
+          .select("id")
+          .eq("name", data.project_name)
+          .single();
+
+        if (projectData) {
+          setSelectedProjectId(projectData.id);
+        }
+
         setClientLoading(false);
-        return;
+      } catch (error) {
+        console.error("Error validando token:", error);
+        setClientError("Hubo un problema validando tu acceso.");
+        setClientLoading(false);
       }
-
-      setClientInfo(data);
-      setSelectedProject(data.project_name);
-      setClientLoading(false);
     };
 
     fetchClient();
   }, [isClientPortal]);
 
-  // -------------------------------------------------------------
-  // 🟦 HELPER FUNCTIONS
-  // -------------------------------------------------------------
+  /* -------------------------------------------------------------
+     HELPERS
+  ------------------------------------------------------------- */
   const getPhaseStatus = (phaseId) => {
     if (!projectPhase) return "pending";
     if (phaseId < projectPhase) return "done";
@@ -169,43 +286,149 @@ function App() {
         return "En curso";
       case "upcoming":
         return "Próxima fase";
-      case "pending":
       default:
         return "Pendiente";
     }
   };
 
-  const formatClientStatus = (status) => {
-    if (status === "realizado") return "Realizado";
-    if (status === "postergado") return "Postergado";
-    return "No realizado";
+  const formatClientStatus = (s) =>
+    s === "realizado"
+      ? "Realizado"
+      : s === "postergado"
+      ? "Postergado"
+      : "No realizado";
+
+  /* -------------------------------------------------------------
+     VALIDACIÓN DE FORMULARIO
+  ------------------------------------------------------------- */
+  const validateSession = (sessionData) => {
+    const errors = [];
+
+    if (!sessionData.title || sessionData.title.trim().length < 3) {
+      errors.push("El título debe tener al menos 3 caracteres");
+    }
+
+    if (sessionData.title.length > 200) {
+      errors.push("El título no puede exceder 200 caracteres");
+    }
+
+    if (!sessionData.summary || sessionData.summary.trim().length < 10) {
+      errors.push("El resumen debe tener al menos 10 caracteres");
+    }
+
+    if (!sessionData.date) {
+      errors.push("La fecha es obligatoria");
+    }
+
+    return errors;
   };
 
-  const handleCreateNote = () => {
-    if (!draft.title.trim()) return;
-    const newNote = {
-      id: Date.now(),
-      project: selectedProject,
-      ...draft,
-    };
-    setNotes([newNote, ...notes]);
-    setActiveNoteId(newNote.id);
-    setDraft({
-      title: "",
-      date: new Date().toISOString().slice(0, 10),
-      tag: "Sesión",
-      summary: "",
-      clientResponsible: "",
-      clientStatus: "postergado",
-    });
+  /* -------------------------------------------------------------
+     GUARDAR FASE MANUAL
+  ------------------------------------------------------------- */
+  const saveManualPhase = async () => {
+    if (!manualPhase || !selectedProject) return;
+
+    try {
+      setSavingPhase(true);
+      setPhaseError(null);
+
+      const { error } = await supabase
+        .from("project_phase")
+        .update({
+          current_phase: manualPhase,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("project_name", selectedProject);
+
+      if (error) throw error;
+
+      setProjectPhase(manualPhase);
+    } catch (error) {
+      console.error("Error actualizando fase:", error);
+      setPhaseError("No pudimos guardar la fase. Intentá de nuevo.");
+    } finally {
+      setSavingPhase(false);
+    }
   };
 
-  // -------------------------------------------------------------
-  // 🟦 RENDER
-  // -------------------------------------------------------------
+  /* -------------------------------------------------------------
+     CREAR SESIÓN CON PERSISTENCIA EN SUPABASE
+  ------------------------------------------------------------- */
+  const handleCreateSession = async () => {
+    if (!selectedProjectId) {
+      setSaveError("No hay un proyecto seleccionado");
+      return;
+    }
+
+    // Validación
+    const errors = validateSession(draft);
+    if (errors.length > 0) {
+      setSaveError(errors.join(". "));
+      return;
+    }
+
+    try {
+      setSavingSession(true);
+      setSaveError(null);
+
+      const newSession = {
+        project_id: selectedProjectId,
+        title: draft.title.trim(),
+        date: draft.date,
+        tag: draft.tag,
+        summary: draft.summary.trim(),
+        client_responsible: draft.clientResponsible || null,
+        client_status: draft.clientStatus,
+      };
+
+      // Guardar en Supabase
+      const { data, error } = await supabase
+        .from("sessions")
+        .insert([newSession])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Actualizar estado local
+      setSessions([data, ...sessions]);
+      setActiveSessionId(data.id);
+
+      // Limpiar formulario
+      setDraft({
+        title: "",
+        date: new Date().toISOString().slice(0, 10),
+        tag: "Sesión",
+        summary: "",
+        clientResponsible: "",
+        clientStatus: "postergado",
+      });
+    } catch (error) {
+      console.error("Error guardando sesión:", error);
+      setSaveError("No pudimos guardar la sesión. Verificá tu conexión.");
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
+  /* -------------------------------------------------------------
+     CAMBIAR PROYECTO
+  ------------------------------------------------------------- */
+  const handleProjectChange = (projectName) => {
+    const project = projects.find(p => p.name === projectName);
+    if (project) {
+      setSelectedProject(project.name);
+      setSelectedProjectId(project.id);
+    }
+  };
+
+  /* -------------------------------------------------------------
+     RENDER PRINCIPAL
+  ------------------------------------------------------------- */
   return (
     <div className="app-root">
-      {/* TOP BAR */}
+      {/* -------------------------------- TOP BAR ------------------------------- */}
       <header className="topbar">
         <div className="topbar-left">
           <div className="topbar-logo">S</div>
@@ -216,29 +439,27 @@ function App() {
             </span>
           </div>
         </div>
+
         <div className="topbar-right">
           {!isClientPortal && (
             <>
               <select
                 className="project-select"
-                value={selectedProject}
-                onChange={(e) => {
-                  setSelectedProject(e.target.value);
-                  const first = notes.find(
-                    (n) => n.project === e.target.value
-                  );
-                  setActiveNoteId(first ? first.id : undefined);
-                }}
+                value={selectedProject || ""}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                aria-label="Seleccionar proyecto"
               >
                 {projects.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
+                  <option key={p.id} value={p.name}>
+                    {p.name}
                   </option>
                 ))}
               </select>
+
               <button className="share-button">Compartir vista pública</button>
             </>
           )}
+
           {isClientPortal && clientInfo && (
             <div className="client-chip">
               Cliente: <strong>{clientInfo.client_name}</strong>
@@ -247,12 +468,12 @@ function App() {
         </div>
       </header>
 
-      {/* LAYOUT PRINCIPAL */}
+      {/* -------------------------------- LAYOUT -------------------------------- */}
       <main className="layout">
-        {/* COLUMNA IZQUIERDA - SOLO INTERNO SELLER */}
+        {/* --------------------- COLUMNA IZQUIERDA (INTERNAL) -------------------- */}
         {!isClientPortal && (
           <section className="column column-left">
-            {/* Nueva nota */}
+            {/* --------------------- NUEVA SESIÓN --------------------- */}
             <div className="card card-new-note">
               <div className="card-header">
                 <div>
@@ -265,48 +486,59 @@ function App() {
               </div>
 
               <div className="card-body">
+                {saveError && (
+                  <div className="error-message" role="alert">
+                    {saveError}
+                  </div>
+                )}
+
                 <input
                   className="field-input"
-                  placeholder="Título de la sesión (ej: Revisión pipeline mensual)"
+                  placeholder="Título de la sesión"
                   value={draft.title}
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
                   }
+                  maxLength={200}
+                  aria-label="Título de la sesión"
+                  disabled={savingSession}
                 />
 
                 <div className="field-row">
                   <div className="field-group">
-                    <label className="field-label">Fecha</label>
+                    <label htmlFor="session-date">Fecha</label>
                     <input
+                      id="session-date"
                       type="date"
                       className="field-input"
                       value={draft.date}
                       onChange={(e) =>
                         setDraft({ ...draft, date: e.target.value })
                       }
+                      disabled={savingSession}
                     />
                   </div>
+
                   <div className="field-group">
-                    <label className="field-label">Etiqueta</label>
+                    <label htmlFor="session-tag">Etiqueta</label>
                     <input
+                      id="session-tag"
                       className="field-input"
                       value={draft.tag}
                       onChange={(e) =>
                         setDraft({ ...draft, tag: e.target.value })
                       }
+                      disabled={savingSession}
                     />
                   </div>
                 </div>
 
-                {/* Responsable + estado cliente (interno, para registrar compromisos) */}
                 <div className="field-row">
                   <div className="field-group">
-                    <label className="field-label">
-                      Responsable del lado cliente
-                    </label>
+                    <label htmlFor="client-responsible">Responsable cliente</label>
                     <input
+                      id="client-responsible"
                       className="field-input"
-                      placeholder="Ej: Gerente Comercial, Dirección, etc."
                       value={draft.clientResponsible}
                       onChange={(e) =>
                         setDraft({
@@ -314,18 +546,20 @@ function App() {
                           clientResponsible: e.target.value,
                         })
                       }
+                      disabled={savingSession}
                     />
                   </div>
+
                   <div className="field-group">
-                    <label className="field-label">
-                      Estado compromiso cliente
-                    </label>
+                    <label htmlFor="client-status">Estado cliente</label>
                     <select
+                      id="client-status"
                       className="field-input"
                       value={draft.clientStatus}
                       onChange={(e) =>
                         setDraft({ ...draft, clientStatus: e.target.value })
                       }
+                      disabled={savingSession}
                     >
                       <option value="realizado">Realizado</option>
                       <option value="postergado">Postergado</option>
@@ -337,103 +571,109 @@ function App() {
                 <textarea
                   className="field-textarea"
                   rows={3}
-                  placeholder="Resumen rápido: acuerdos, próximos pasos, decisiones clave, riesgos, compromisos del cliente..."
+                  placeholder="Resumen (mínimo 10 caracteres)..."
                   value={draft.summary}
                   onChange={(e) =>
                     setDraft({ ...draft, summary: e.target.value })
                   }
+                  aria-label="Resumen de la sesión"
+                  disabled={savingSession}
                 />
 
                 <button
                   className={`primary-button ${
-                    !draft.title.trim() ? "primary-button--disabled" : ""
+                    !draft.title.trim() || savingSession ? "primary-button--disabled" : ""
                   }`}
-                  disabled={!draft.title.trim()}
-                  onClick={handleCreateNote}
+                  disabled={!draft.title.trim() || savingSession}
+                  onClick={handleCreateSession}
                 >
-                  + Guardar nota y actualizar bitácora
+                  {savingSession ? "Guardando..." : "+ Guardar nota"}
                 </button>
               </div>
             </div>
 
-            {/* Lista de notas */}
+            {/* --------------------- LISTA DE SESIONES --------------------- */}
             <div className="card card-notes-list">
               <div className="card-header card-header--small">
                 <div className="card-overline">NOTAS DE SESIÓN</div>
-                <div className="card-counter">
-                  {projectNotes.length} entradas
-                </div>
+                <div className="card-counter">{projectSessions.length} entradas</div>
               </div>
 
-              <div className="notes-list">
-                {projectNotes.length === 0 ? (
-                  <div className="notes-empty">
-                    Todavía no hay notas para este proyecto.
-                  </div>
-                ) : (
-                  projectNotes.map((note) => (
+              {sessionsLoading ? (
+                <div className="notes-loading">Cargando sesiones...</div>
+              ) : sessionsError ? (
+                <div className="notes-error" role="alert">
+                  {sessionsError}
+                </div>
+              ) : (
+                <div className="notes-list">
+                  {projectSessions.map((session) => (
                     <div
-                      key={note.id}
+                      key={session.id}
                       className={`note-item ${
-                        note.id === activeNoteId ? "note-item--active" : ""
+                        session.id === activeSessionId ? "note-item--active" : ""
                       }`}
-                      onClick={() => setActiveNoteId(note.id)}
+                      onClick={() => setActiveSessionId(session.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") setActiveSessionId(session.id);
+                      }}
                     >
                       <div className="note-item-top">
-                        <div className="note-title">{note.title}</div>
+                        <div className="note-title">{session.title}</div>
                         <div className="note-date">
-                          {new Date(note.date).toLocaleDateString("es-PY", {
+                          {new Date(session.date).toLocaleDateString("es-PY", {
                             day: "2-digit",
                             month: "short",
                           })}
                         </div>
                       </div>
-                      <div className="note-tags">
-                        <span className="tag">{note.tag}</span>
-                        {note.clientStatus && (
-                          <span className="tag tag--status">
-                            {formatClientStatus(note.clientStatus)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="note-summary">
-                        {note.summary || "Sin resumen registrado."}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
 
-              {activeNote && (
+                      <div className="note-tags">
+                        <span className="tag">{session.tag}</span>
+                        <span className="tag tag--status">
+                          {formatClientStatus(session.client_status)}
+                        </span>
+                      </div>
+
+                      <div className="note-summary">{session.summary}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeSession && !sessionsLoading && (
                 <div className="notes-footer">
-                  Última nota seleccionada:{" "}
-                  <span className="notes-footer-title">
-                    {activeNote.title}
-                  </span>
+                  Última sesión seleccionada:{" "}
+                  <strong>{activeSession.title}</strong>
                 </div>
               )}
             </div>
           </section>
         )}
 
-        {/* COLUMNA DERECHA - VISTA CLIENTE */}
+        {/* ---------------------- COLUMNA DERECHA ---------------------- */}
         <section className="column column-right">
-          {/* Resumen proyecto */}
+          {/* ------------------- RESUMEN DEL PROYECTO ------------------- */}
           <div className="card card-project-summary">
             <div className="summary-header">
               <div>
                 <div className="card-overline">
                   {isClientPortal ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}
                 </div>
+
                 <h1 className="project-title">
-                  Bitácora de {selectedProject}
+                  Bitácora de {selectedProject || "..."}
                 </h1>
+
                 <p className="project-description">
                   {isClientPortal
-                    ? "Esta es la vista ejecutiva de la bitácora de consultoría para tu empresa. Aquí verás los principales hitos, acuerdos y avances del proyecto."
-                    : "Línea de tiempo viva con los hitos, acuerdos y avances de consultoría. Esta vista es la que podrías compartir con el cliente como resumen ejecutivo del proyecto."}
+                    ? "Aquí verás los principales hitos, acuerdos y avances del proyecto."
+                    : "Resumen ejecutivo del avance del proyecto para cliente."}
                 </p>
               </div>
+
               <div className="summary-metrics">
                 <div className="metric-card">
                   <div className="metric-label">Última actualización</div>
@@ -441,84 +681,192 @@ function App() {
                     {new Date().toLocaleDateString("es-PY")}
                   </div>
                 </div>
+
                 <div className="metric-card metric-card--green">
                   <div className="metric-label">Sesiones registradas</div>
-                  <div className="metric-value">{projectNotes.length}</div>
+                  <div className="metric-value">{projectSessions.length}</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Roadmap de fases - solo modo cliente */}
-          {isClientPortal && (
-            <div className="card card-phase-roadmap">
-              <div className="phase-header">
-                <div>
-                  <div className="card-overline">AVANCE DEL PROYECTO</div>
-                  <h2 className="phase-title">
-                    Fase actual:{" "}
-                    <span>
-                      {PHASES.find((p) => p.id === projectPhase)?.label ?? "Configurando..."}
-                    </span>
-                  </h2>
-                  <p className="phase-subtitle">
-                    Visualiza en qué etapa del proceso de consultoría se encuentra tu proyecto.
-                  </p>
-                </div>
+          {/* ---------------- ROADMAP CURVO + CONTROL MANUAL ---------------- */}
+          <div className="card card-phase-roadmap card-phase-roadmap--curved">
+            {/* ----- TITULO ----- */}
+            <div className="phase-header phase-header--curved">
+              <div>
+                <div className="card-overline">AVANCE DEL PROYECTO</div>
 
-                <div className="phase-meta">
-                  <div className="phase-pill">
-                    {phaseLoading ? (
-                      <span>Cargando...</span>
-                    ) : (
-                      <>
-                        <span className="phase-pill-number">{projectPhase ?? "-"}</span>
-                        <span className="phase-pill-text">de {PHASES.length} fases</span>
-                      </>
-                    )}
-                  </div>
-                </div>
+                <h2 className="phase-title">
+                  Fase actual:{" "}
+                  <span>
+                    {PHASES.find((p) => p.id === projectPhase)?.label ||
+                      "Configurando..."}
+                  </span>
+                </h2>
+
+                <p className="phase-subtitle">
+                  Visualizá en qué etapa se encuentra tu proyecto.
+                </p>
               </div>
 
-              <div className="phase-steps">
-                {PHASES.map((phase, index) => {
-                  const status = getPhaseStatus(phase.id);
-                  const isLast = index === PHASES.length - 1;
+              <div className="phase-meta">
+                <div className="phase-pill">
+                  {phaseLoading ? (
+                    "Cargando..."
+                  ) : (
+                    <>
+                      <span className="phase-pill-number">
+                        {projectPhase ?? "-"}
+                      </span>
+                      <span className="phase-pill-text">
+                        de {PHASES.length} fases
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ----- CONTROL MANUAL (SOLO INTERNO) ----- */}
+            {!isClientPortal && (
+              <div className="manual-phase-control">
+                <h3 className="manual-phase-title">Control manual de fase</h3>
+                <p className="manual-phase-description">
+                  Seleccioná la fase actual del proyecto. Esto actualiza el
+                  roadmap del cliente.
+                </p>
+
+                {phaseError && (
+                  <div className="error-message" role="alert">
+                    {phaseError}
+                  </div>
+                )}
+
+                <div className="manual-phase-grid">
+                  {PHASES.map((p) => (
+                    <div
+                      key={p.id}
+                      className={`manual-phase-card ${
+                        manualPhase === p.id ? "selected" : ""
+                      }`}
+                      onClick={() => setManualPhase(p.id)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Seleccionar fase ${p.id}: ${p.label}`}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") setManualPhase(p.id);
+                      }}
+                    >
+                      <div className="manual-phase-number">{p.id}</div>
+                      <div className="manual-phase-label">{p.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="manual-phase-save"
+                  disabled={!manualPhase || savingPhase}
+                  onClick={saveManualPhase}
+                >
+                  {savingPhase ? "Guardando..." : "Guardar fase actual"}
+                </button>
+              </div>
+            )}
+
+            {/* ----- ROADMAP CURVO SVG ----- */}
+            <div className="phase-curve-wrapper">
+              <svg
+                viewBox="0 0 960 220"
+                className="phase-curve-svg"
+                role="img"
+                aria-label="Roadmap del proyecto con 4 fases"
+              >
+                <title>Progreso del proyecto a través de 4 fases</title>
+                <path
+                  className="phase-curve-path"
+                  d="M40 180
+                     C 180 120, 260 80, 360 110
+                     S 560 200, 720 150
+                     S 880 80, 920 110"
+                  fill="none"
+                />
+
+                {PHASE_MARKERS.map((marker) => {
+                  const status = getPhaseStatus(marker.id);
+                  const phase = PHASES.find((p) => p.id === marker.id);
 
                   return (
-                    <div key={phase.id} className="phase-step">
-                      <div className="phase-step-top">
-                        <div className={`phase-dot phase-dot--${status}`}>
-                          {phase.id}
-                        </div>
+                    <g
+                      key={marker.id}
+                      className={`phase-marker phase-marker--${status}`}
+                      role="img"
+                      aria-label={`Fase ${marker.id}: ${phase.label} - ${getPhaseStatusLabel(status)}`}
+                    >
+                      <circle
+                        cx={marker.x}
+                        cy={marker.y}
+                        r="20"
+                        className="phase-marker-ring"
+                      />
 
-                        {!isLast && (
-                          <div className={`phase-connector phase-connector--${status}`} />
-                        )}
-                      </div>
+                      <circle
+                        cx={marker.x}
+                        cy={marker.y}
+                        r="9"
+                        className="phase-marker-dot"
+                      />
 
-                      <div className="phase-step-info">
-                        <div className="phase-step-label">{phase.label}</div>
-                        <div className={`phase-status-badge phase-status-badge--${status}`}>
-                          {getPhaseStatusLabel(status)}
-                        </div>
-                      </div>
-                    </div>
+                      <text
+                        x={marker.x}
+                        y={marker.y + 4}
+                        textAnchor="middle"
+                        className="phase-marker-index"
+                      >
+                        {marker.id}
+                      </text>
+
+                      <text
+                        x={marker.x}
+                        y={marker.y - 26}
+                        textAnchor="middle"
+                        className="phase-marker-label"
+                      >
+                        {phase.label}
+                      </text>
+                    </g>
                   );
                 })}
-              </div>
-
-              {!phaseLoading && projectPhase && (
-                <p className="phase-footer">
-                  Ahora estamos trabajando en la fase de{" "}
-                  <strong>{PHASES.find((p) => p.id === projectPhase)?.label}</strong>,
-                  siguiendo el roadmap definido para tu proyecto.
-                </p>
-              )}
+              </svg>
             </div>
-          )}
 
-          {/* Timeline */}
+            {/* LEYENDA */}
+            <div className="phase-legend">
+              {PHASES.map((phase) => {
+                const status = getPhaseStatus(phase.id);
+                return (
+                  <div
+                    key={phase.id}
+                    className={`phase-legend-item phase-legend-item--${status}`}
+                  >
+                    <div className="phase-legend-pill">
+                      <span className="phase-legend-index">
+                        {phase.id.toString().padStart(2, "0")}
+                      </span>
+                      <span className="phase-legend-title">
+                        {phase.label}
+                      </span>
+                    </div>
+                    <span className="phase-legend-status">
+                      {getPhaseStatusLabel(status)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ---------------------------- TIMELINE ---------------------------- */}
           <div className="card card-timeline">
             {isClientPortal && clientLoading && (
               <div className="timeline-empty">
@@ -527,65 +875,71 @@ function App() {
             )}
 
             {isClientPortal && !clientLoading && clientError && (
-              <div className="timeline-empty">
+              <div className="timeline-empty" role="alert">
                 {clientError}
                 <br />
                 <br />
-                <span className="timeline-help">
+                <small>
                   Si el problema persiste, escribinos a{" "}
                   <strong>ml@seller.consulting</strong>.
-                </span>
+                </small>
               </div>
             )}
 
             {(!isClientPortal || (!clientLoading && !clientError)) && (
               <>
-                {projectNotes.length === 0 ? (
+                {sessionsLoading ? (
+                  <div className="timeline-empty">Cargando bitácora...</div>
+                ) : projectSessions.length === 0 ? (
                   <div className="timeline-empty">
-                    Todavía no hay eventos en la bitácora de este proyecto.
+                    Todavía no hay eventos en la bitácora.
                   </div>
                 ) : (
                   <ol className="timeline">
-                    {projectNotes.map((note, index) => (
-                      <li key={note.id} className="timeline-item">
+                    {projectSessions.map((session, index) => (
+                      <li key={session.id} className="timeline-item">
                         <div className="timeline-point" />
+
                         <div className="timeline-content">
                           <div className="timeline-header">
                             <div className="timeline-date">
-                              {new Date(note.date).toLocaleDateString("es-PY", {
+                              {new Date(session.date).toLocaleDateString("es-PY", {
                                 weekday: "short",
                                 day: "2-digit",
                                 month: "short",
                                 year: "numeric",
                               })}
                             </div>
+
                             <div className="timeline-badges">
                               <span className="timeline-badge">
-                                Sesión #{projectNotes.length - index}
+                                Sesión #{projectSessions.length - index}
                               </span>
                               <span className="timeline-badge timeline-badge--blue">
-                                {note.tag}
+                                {session.tag}
                               </span>
                             </div>
                           </div>
+
                           <div className="timeline-card">
-                            <div className="timeline-title">
-                              {note.title}
-                            </div>
+                            <div className="timeline-title">{session.title}</div>
+
                             <div className="timeline-summary">
-                              {note.summary}
+                              {session.summary}
                             </div>
+
                             <div className="timeline-meta">
                               <span>
                                 • Responsable cliente:{" "}
                                 <strong>
-                                  {note.clientResponsible || "Sin asignar"}
+                                  {session.client_responsible || "Sin asignar"}
                                 </strong>
                               </span>
+
                               <span>
                                 • Estado cliente:{" "}
                                 <strong className="status-pill">
-                                  {formatClientStatus(note.clientStatus)}
+                                  {formatClientStatus(session.client_status)}
                                 </strong>
                               </span>
                             </div>
