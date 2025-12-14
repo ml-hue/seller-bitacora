@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Bitacora Architecture v1">
+    <mxGraphModel dx="1100" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <!-- User -->
+        <mxCell id="user" value="Usuario&#10;(Consultor Seller)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1E88E5;" vertex="1" parent="1">
+          <mxGeometry x="40" y="260" width="160" height="80" as="geometry"/>
+        </mxCell>
+
+        <!-- Frontend -->
+        <mxCell id="frontend" value="Bitácora Web App&#10;Frontend (React)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="260" y="240" width="220" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Hosting -->
+        <mxCell id="vercel" value="Hosting & Deploy&#10;Vercel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#8E24AA;" vertex="1" parent="1">
+          <mxGeometry x="260" y="100" width="220" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Backend -->
+        <mxCell id="backend" value="Backend / Data Layer&#10;Supabase" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFDE7;strokeColor=#F9A825;" vertex="1" parent="1">
+          <mxGeometry x="560" y="230" width="260" height="140" as="geometry"/>
+        </mxCell>
+
+        <!-- DB -->
+        <mxCell id="db" value="Database&#10;Clients&#10;Projects&#10;Sessions" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#FB8C00;" vertex="1" parent="1">
+          <mxGeometry x="880" y="250" width="220" height="120" as="geometry"/>
+        </mxCell>
+
+        <!-- Ownership -->
+        <mxCell id="owner" value="Ownership & IP&#10;Seller Group E.A.S." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECEFF1;strokeColor=#546E7A;" vertex="1" parent="1">
+          <mxGeometry x="560" y="420" width="260" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Domain -->
+        <mxCell id="domain" value="Public Domain&#10;https://bitacora.seller.consulting" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1F5FE;strokeColor=#039BE5;" vertex="1" parent="1">
+          <mxGeometry x="260" y="380" width="220" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" style="endArrow=block;html=1;" edge="1" parent="1" source="user" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e2" style="endArrow=block;html=1;" edge="1" parent="1" source="frontend" target="backend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e3" style="endArrow=block;html=1;" edge="1" parent="1" source="backend" target="db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e4" style="endArrow=block;html=1;" edge="1" parent="1" source="frontend" target="vercel">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e5" style="endArrow=block;html=1;dashed=1;" edge="1" parent="1" source="owner" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e6" style="endArrow=block;html=1;" edge="1" parent="1" source="domain" target="frontend">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

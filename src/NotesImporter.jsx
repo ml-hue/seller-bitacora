@@ -1,522 +1,682 @@
-import { useState } from "react";
-import { supabase } from "./supabaseClient";
+import React, { useState, useEffect } from 'react';
+import { FileText, Upload, Download, CheckCircle, AlertCircle, Trash2, Loader } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
-function NotesImporter() {
-  const [notesText, setNotesText] = useState("");
-  const [selectedProject, setSelectedProject] = useState("Karu");
-  const [importing, setImporting] = useState(false);
-  const [results, setResults] = useState(null);
-  const [previewNotes, setPreviewNotes] = useState([]);
+const PHASES = [
+  { id: 1, label: 'Diagnóstico' },
+  { id: 2, label: 'Plan estratégico' },
+  { id: 3, label: 'Implementación' },
+  { id: 4, label: 'Seguimiento & control' }
+];
 
-  const projects = [
-    { id: "karu", name: "Karu" },
-    { id: "everdem", name: "Everdem" },
-    { id: "salumax", name: "Salumax" },
-    { id: "labco", name: "Labco" },
-    { id: "forbes", name: "Forbes" },
-    { id: "gbb", name: "GBB" },
-    { id: "kove", name: "Kove" },
-  ];
+export default function NotesToBitacora() {
+  const [pdfs, setPdfs] = useState([]);
+  const [extractedData, setExtractedData] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
+  const [loadingPdf, setLoadingPdf] = useState(false);
 
-  /* ===============================================
-     PARSEAR NOTAS DESDE TEXTO
-  =============================================== */
-  const parseNotes = (text) => {
-    if (!text.trim()) return [];
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        setLoadingPdf(false);
+      }
+    };
+    document.body.appendChild(script);
+    setLoadingPdf(true);
 
-    const notes = [];
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files);
     
-    // Dividir por separadores comunes
-    const blocks = text.split(/\n\n---\n\n|\n\n===\n\n|\n\n\n/);
-
-    blocks.forEach((block) => {
-      const lines = block.trim().split("\n");
-      if (lines.length === 0) return;
-
-      let title = "";
-      let date = "";
-      let content = "";
-      let tag = "Sesión";
-      let clientResponsible = "";
-      let clientStatus = "postergado";
-
-      // Buscar patrones comunes
-      lines.forEach((line, index) => {
-        const lowerLine = line.toLowerCase();
-
-        // Título (primera línea o línea con "título:")
-        if (index === 0 && !line.includes(":")) {
-          title = line.trim();
-        } else if (lowerLine.includes("título:") || lowerLine.includes("title:")) {
-          title = line.split(":")[1]?.trim() || "";
-        }
-
-        // Fecha
-        else if (
-          lowerLine.includes("fecha:") ||
-          lowerLine.includes("date:") ||
-          lowerLine.match(/\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/)
-        ) {
-          const dateMatch = line.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
-          if (dateMatch) {
-            let [_, day, month, year] = dateMatch;
-            if (year.length === 2) year = "20" + year;
-            date = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-          }
-        }
-
-        // Etiqueta
-        else if (lowerLine.includes("etiqueta:") || lowerLine.includes("tag:")) {
-          tag = line.split(":")[1]?.trim() || "Sesión";
-        }
-
-        // Responsable
-        else if (
-          lowerLine.includes("responsable:") ||
-          lowerLine.includes("responsible:")
-        ) {
-          clientResponsible = line.split(":")[1]?.trim() || "";
-        }
-
-        // Estado
-        else if (lowerLine.includes("estado:") || lowerLine.includes("status:")) {
-          const statusText = line.split(":")[1]?.trim().toLowerCase() || "";
-          if (statusText.includes("realizado") || statusText.includes("done")) {
-            clientStatus = "realizado";
-          } else if (
-            statusText.includes("no realizado") ||
-            statusText.includes("not done")
-          ) {
-            clientStatus = "no_realizado";
-          }
-        }
-
-        // Contenido (resto)
-        else if (
-          !lowerLine.includes("título:") &&
-          !lowerLine.includes("fecha:") &&
-          !lowerLine.includes("etiqueta:") &&
-          line.trim()
-        ) {
-          content += line + " ";
-        }
-      });
-
-      // Si no hay título, usar primera línea
-      if (!title && lines.length > 0) {
-        title = lines[0].substring(0, 100);
-      }
-
-      // Si no hay fecha, usar hoy
-      if (!date) {
-        date = new Date().toISOString().slice(0, 10);
-      }
-
-      // Si no hay contenido, usar el bloque completo
-      if (!content.trim()) {
-        content = block.trim();
-      }
-
-      if (title) {
-        notes.push({
-          title: title.trim(),
-          date,
-          tag,
-          summary: content.trim().substring(0, 1000),
-          clientResponsible,
-          clientStatus,
-        });
-      }
-    });
-
-    return notes;
-  };
-
-  /* ===============================================
-     PREVISUALIZAR NOTAS
-  =============================================== */
-  const handlePreview = () => {
-    const parsed = parseNotes(notesText);
-    setPreviewNotes(parsed);
-  };
-
-  /* ===============================================
-     IMPORTAR A SUPABASE
-  =============================================== */
-  const handleImport = async () => {
-    if (previewNotes.length === 0) {
-      alert("Primero previsualizá las notas antes de importar");
-      return;
-    }
+    if (files.length === 0) return;
+    
+    setProcessing(true);
 
     try {
-      setImporting(true);
-      setResults(null);
+      const processedFiles = await Promise.all(
+        files.map(async (file) => {
+          const text = await extractTextFromPDF(file);
+          return { name: file.name, text, file };
+        })
+      );
 
-      // Obtener project_id
-      const { data: projectData, error: projectError } = await supabase
-        .from("projects")
-        .select("id")
-        .eq("name", selectedProject)
-        .single();
-
-      if (projectError || !projectData) {
-        throw new Error(`No se encontró el proyecto ${selectedProject}`);
-      }
-
-      const projectId = projectData.id;
-
-      // Preparar sesiones para insertar
-      const sessionsToInsert = previewNotes.map((note) => ({
-        project_id: projectId,
-        title: note.title,
-        date: note.date,
-        tag: note.tag,
-        summary: note.summary,
-        client_responsible: note.clientResponsible || null,
-        client_status: note.clientStatus,
-      }));
-
-      // Insertar en batch
-      const { data, error } = await supabase
-        .from("sessions")
-        .insert(sessionsToInsert)
-        .select();
-
-      if (error) throw error;
-
-      setResults({
-        success: true,
-        count: data.length,
-        message: `¡${data.length} sesiones importadas exitosamente!`,
-      });
-
-      // Limpiar formulario
-      setNotesText("");
-      setPreviewNotes([]);
+      setPdfs(processedFiles);
+      const structured = parseNotesToStructure(processedFiles);
+      setExtractedData(structured);
+      setActiveTab('review');
     } catch (error) {
-      console.error("Error importando:", error);
-      setResults({
-        success: false,
-        message: `Error: ${error.message}`,
-      });
+      console.error('Error procesando archivos:', error);
+      alert('Error procesando los archivos. Verifica que sean PDFs válidos.');
     } finally {
-      setImporting(false);
+      setProcessing(false);
     }
   };
 
-  /* ===============================================
-     EJEMPLO DE FORMATO
-  =============================================== */
-  const exampleText = `Título: Reunión inicial con cliente
-Fecha: 15/01/2025
-Etiqueta: Kickoff
-Responsable: Juan Pérez
-Estado: Realizado
+  const extractTextFromPDF = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          if (!window.pdfjsLib) {
+            throw new Error('PDF.js no está cargado');
+          }
 
-Discutimos los objetivos principales del proyecto y establecimos un plan de acción para las próximas semanas.
+          const typedarray = new Uint8Array(e.target.result);
+          const loadingTask = window.pdfjsLib.getDocument(typedarray);
+          const pdf = await loadingTask.promise;
+          
+          let fullText = '';
 
----
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items.map(item => item.str).join(' ');
+            fullText += pageText + '\n\n';
+          }
 
-Título: Sesión de seguimiento
-Fecha: 22/01/2025
-Etiqueta: Seguimiento
-
-Revisamos el progreso del primer sprint y ajustamos prioridades según feedback del cliente.`;
-
-  const loadExample = () => {
-    setNotesText(exampleText);
-    setPreviewNotes([]);
+          resolve(fullText);
+        } catch (error) {
+          console.error('Error extrayendo texto del PDF:', error);
+          resolve('');
+        }
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('Error leyendo el archivo'));
+      };
+      
+      reader.readAsArrayBuffer(file);
+    });
   };
 
-  /* ===============================================
-     RENDER
-  =============================================== */
+  const parseNotesToStructure = (files) => {
+    const clients = [];
+    const sessions = [];
+    const projectPhases = [];
+
+    files.forEach((file, fileIndex) => {
+      const text = file.text;
+      const fileName = file.name.replace('.pdf', '');
+      
+      const lines = text.split('\n').filter(l => l.trim());
+      const clientName = lines[0]?.trim() || fileName;
+      
+      const clientId = `client_${fileIndex + 1}`;
+      clients.push({
+        client_id: clientId,
+        client_name: clientName,
+        organization: '',
+        partner: '',
+        industry: '',
+        country: 'Paraguay',
+        status: 'active'
+      });
+
+      const datePattern = /(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})|(\d{4}[-/]\d{1,2}[-/]\d{1,2})/g;
+      const sessionBlocks = text.split(/(?=\d{1,2}[-/]\d{1,2}[-/]\d{2,4})/);
+
+      let sessionCount = 0;
+      sessionBlocks.forEach((block, idx) => {
+        const dateMatch = block.match(datePattern);
+        if (dateMatch && block.length > 50) {
+          sessionCount++;
+          const sessionDate = parseDate(dateMatch[0]);
+          const sessionText = block.replace(dateMatch[0], '').trim();
+          
+          const sessionLines = sessionText.split('\n').filter(l => l.trim());
+          const title = sessionLines[0]?.substring(0, 200) || `Sesión ${sessionCount}`;
+          
+          const phase = detectPhase(sessionText);
+          
+          sessions.push({
+            session_id: `session_${fileIndex}_${idx}`,
+            project_id: clientId,
+            session_date: sessionDate,
+            stage: PHASES[phase - 1]?.label || 'Diagnóstico',
+            participants: extractParticipants(sessionText),
+            key_topics: sessionLines.slice(0, 3).join('. ').substring(0, 500),
+            next_steps: extractNextSteps(sessionText),
+            title: title,
+            summary: sessionLines.join(' ').substring(0, 1000),
+            client_status: 'realizado'
+          });
+        }
+      });
+
+      const latestPhase = sessions
+        .filter(s => s.project_id === clientId)
+        .reduce((max, s) => {
+          const phaseNum = PHASES.findIndex(p => p.label === s.stage) + 1;
+          return Math.max(max, phaseNum);
+        }, 1);
+
+      projectPhases.push({
+        project_name: clientName,
+        current_phase: latestPhase
+      });
+    });
+
+    return { clients, sessions, projectPhases };
+  };
+
+  const detectPhase = (text) => {
+    const lower = text.toLowerCase();
+    if (lower.includes('seguimiento') || lower.includes('control') || lower.includes('monitoreo')) return 4;
+    if (lower.includes('implementacion') || lower.includes('implementación') || lower.includes('ejecucion')) return 3;
+    if (lower.includes('plan') || lower.includes('estrategia') || lower.includes('planificacion')) return 2;
+    if (lower.includes('diagnostico') || lower.includes('diagnóstico') || lower.includes('relevamiento')) return 1;
+    return 1;
+  };
+
+  const parseDate = (dateStr) => {
+    const formats = [
+      /(\d{1,2})[-/](\d{1,2})[-/](\d{4})/,
+      /(\d{1,2})[-/](\d{1,2})[-/](\d{2})/,
+      /(\d{4})[-/](\d{1,2})[-/](\d{1,2})/
+    ];
+
+    for (let format of formats) {
+      const match = dateStr.match(format);
+      if (match) {
+        let year, month, day;
+        if (format === formats[2]) {
+          [, year, month, day] = match;
+        } else {
+          [, day, month, year] = match;
+          if (year.length === 2) year = '20' + year;
+        }
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      }
+    }
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const extractParticipants = (text) => {
+    const lines = text.split('\n');
+    const participantLine = lines.find(l => 
+      l.toLowerCase().includes('participantes') || 
+      l.toLowerCase().includes('presentes') ||
+      l.toLowerCase().includes('asistentes')
+    );
+    return participantLine ? participantLine.split(':')[1]?.trim() || '' : '';
+  };
+
+  const extractNextSteps = (text) => {
+    const lines = text.split('\n');
+    const nextStepsIndex = lines.findIndex(l => 
+      l.toLowerCase().includes('proximos pasos') ||
+      l.toLowerCase().includes('próximos pasos') ||
+      l.toLowerCase().includes('acuerdos') ||
+      l.toLowerCase().includes('tareas')
+    );
+    
+    if (nextStepsIndex !== -1) {
+      return lines.slice(nextStepsIndex + 1, nextStepsIndex + 5).join('. ').substring(0, 500);
+    }
+    return '';
+  };
+
+  const exportToExcel = () => {
+    if (!extractedData) return;
+
+    const clientsWS = XLSX.utils.json_to_sheet(extractedData.clients);
+    const clientsWB = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(clientsWB, clientsWS, 'Clientes');
+    XLSX.writeFile(clientsWB, 'clientes.xlsx');
+
+    const sessionsWS = XLSX.utils.json_to_sheet(extractedData.sessions);
+    const sessionsWB = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(sessionsWB, sessionsWS, 'Sesiones');
+    XLSX.writeFile(sessionsWB, 'sesiones.xlsx');
+
+    const phasesWS = XLSX.utils.json_to_sheet(extractedData.projectPhases);
+    const phasesWB = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(phasesWB, phasesWS, 'Fases');
+    XLSX.writeFile(phasesWB, 'fases_proyectos.xlsx');
+
+    alert('Archivos Excel exportados correctamente');
+  };
+
+  const updateClient = (clientId, field, value) => {
+    setExtractedData(prev => ({
+      ...prev,
+      clients: prev.clients.map(c => 
+        c.client_id === clientId ? { ...c, [field]: value } : c
+      )
+    }));
+  };
+
+  const updateSession = (sessionId, field, value) => {
+    setExtractedData(prev => ({
+      ...prev,
+      sessions: prev.sessions.map(s => 
+        s.session_id === sessionId ? { ...s, [field]: value } : s
+      )
+    }));
+  };
+
+  const deleteSession = (sessionId) => {
+    if (window.confirm('Eliminar esta sesión?')) {
+      setExtractedData(prev => ({
+        ...prev,
+        sessions: prev.sessions.filter(s => s.session_id !== sessionId)
+      }));
+    }
+  };
+
+  if (loadingPdf) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: 'white', borderRadius: '16px', padding: '3rem', textAlign: 'center' }}>
+          <Loader size={48} color="#667eea" style={{ animation: 'spin 1s linear infinite' }} />
+          <div style={{ marginTop: '1rem', fontSize: '1.25rem', color: '#1a202c' }}>
+            Cargando procesador de PDF...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ 
-      minHeight: "100vh", 
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      padding: "40px 20px"
-    }}>
-      <div style={{ 
-        maxWidth: "1200px", 
-        margin: "0 auto",
-        background: "white",
-        borderRadius: "16px",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-        overflow: "hidden"
-      }}>
-        {/* Header */}
-        <div style={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          padding: "32px",
-          color: "white"
-        }}>
-          <h1 style={{ margin: 0, fontSize: "32px", fontWeight: "700" }}>
-            📥 Importador de Notas
-          </h1>
-          <p style={{ margin: "8px 0 0", opacity: 0.9, fontSize: "16px" }}>
-            Migrá tus notas de macOS a la bitácora de Seller Consulting
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '2rem' }}>
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        <div style={{ background: 'white', borderRadius: '16px', padding: '2rem', marginBottom: '2rem', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+            <FileText size={32} color="#667eea" />
+            <h1 style={{ margin: 0, fontSize: '2rem', color: '#1a202c' }}>
+              Importador Notes a Bitácora Supabase
+            </h1>
+          </div>
+          <p style={{ margin: 0, color: '#718096', fontSize: '1rem' }}>
+            Convierte tus notas de sesiones en datos estructurados para tu Bitácora de Clientes
           </p>
         </div>
 
-        <div style={{ padding: "32px" }}>
-          {/* Selector de proyecto */}
-          <div style={{ marginBottom: "24px" }}>
-            <label style={{ 
-              display: "block", 
-              marginBottom: "8px",
-              fontWeight: "600",
-              color: "#334155"
-            }}>
-              Proyecto destino:
-            </label>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
+        <div style={{ background: 'white', borderRadius: '16px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0' }}>
+            <button
+              onClick={() => setActiveTab('upload')}
               style={{
-                width: "100%",
-                padding: "12px 16px",
-                fontSize: "16px",
-                border: "2px solid #e2e8f0",
-                borderRadius: "8px",
-                background: "white",
-                cursor: "pointer"
+                flex: 1,
+                padding: '1rem',
+                border: 'none',
+                background: activeTab === 'upload' ? '#667eea' : 'transparent',
+                color: activeTab === 'upload' ? 'white' : '#4a5568',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer'
               }}
             >
-              {projects.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Área de texto */}
-          <div style={{ marginBottom: "16px" }}>
-            <div style={{ 
-              display: "flex", 
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "8px"
-            }}>
-              <label style={{ fontWeight: "600", color: "#334155" }}>
-                Pegá tus notas aquí:
-              </label>
-              <button
-                onClick={loadExample}
-                style={{
-                  padding: "6px 12px",
-                  fontSize: "14px",
-                  background: "#f1f5f9",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  color: "#475569"
-                }}
-              >
-                📋 Cargar ejemplo
-              </button>
-            </div>
-            <textarea
-              value={notesText}
-              onChange={(e) => setNotesText(e.target.value)}
-              placeholder={`Pegá tus notas aquí. Podés usar este formato:
-
-Título: Nombre de la sesión
-Fecha: 15/01/2025
-Etiqueta: Kickoff
-Responsable: Nombre del responsable
-Estado: Realizado
-
-Contenido de la nota...
-
----
-
-(Separá múltiples notas con ---)`}
-              rows={12}
+              1. Subir PDFs
+            </button>
+            <button
+              onClick={() => setActiveTab('review')}
+              disabled={!extractedData}
               style={{
-                width: "100%",
-                padding: "16px",
-                fontSize: "14px",
-                border: "2px solid #e2e8f0",
-                borderRadius: "8px",
-                fontFamily: "monospace",
-                resize: "vertical"
+                flex: 1,
+                padding: '1rem',
+                border: 'none',
+                background: activeTab === 'review' ? '#667eea' : 'transparent',
+                color: activeTab === 'review' ? 'white' : '#4a5568',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: extractedData ? 'pointer' : 'not-allowed',
+                opacity: extractedData ? 1 : 0.5
               }}
-            />
-            <p style={{ 
-              fontSize: "14px", 
-              color: "#64748b",
-              margin: "8px 0 0"
-            }}>
-              💡 <strong>Tip:</strong> Separá múltiples notas con <code>---</code> o líneas en blanco
-            </p>
+            >
+              2. Revisar datos
+            </button>
+            <button
+              onClick={() => setActiveTab('export')}
+              disabled={!extractedData}
+              style={{
+                flex: 1,
+                padding: '1rem',
+                border: 'none',
+                background: activeTab === 'export' ? '#667eea' : 'transparent',
+                color: activeTab === 'export' ? 'white' : '#4a5568',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: extractedData ? 'pointer' : 'not-allowed',
+                opacity: extractedData ? 1 : 0.5
+              }}
+            >
+              3. Exportar Excel
+            </button>
           </div>
 
-          {/* Botón previsualizar */}
-          <button
-            onClick={handlePreview}
-            disabled={!notesText.trim()}
-            style={{
-              width: "100%",
-              padding: "14px",
-              fontSize: "16px",
-              fontWeight: "600",
-              background: notesText.trim() ? "#3b82f6" : "#cbd5e1",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: notesText.trim() ? "pointer" : "not-allowed",
-              marginBottom: "24px"
-            }}
-          >
-            👀 Previsualizar notas
-          </button>
+          <div style={{ padding: '2rem' }}>
+            {activeTab === 'upload' && (
+              <div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#1a202c' }}>
+                  Paso 1: Exporta y sube tus notas
+                </h2>
+                
+                <div style={{ background: '#ebf4ff', border: '1px solid #bee3f8', borderRadius: '8px', padding: '1rem', marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#2c5282' }}>
+                    Como exportar desde Notes (macOS):
+                  </h3>
+                  <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#2d3748' }}>
+                    <li>Abri Notes en tu Mac</li>
+                    <li>Selecciona las notas de cada cliente</li>
+                    <li>Ve a Archivo - Exportar como PDF</li>
+                    <li>Guarda un PDF por proyecto</li>
+                    <li>Sube todos los PDFs aqui abajo</li>
+                  </ol>
+                </div>
 
-          {/* Preview */}
-          {previewNotes.length > 0 && (
-            <div style={{
-              border: "2px solid #e2e8f0",
-              borderRadius: "8px",
-              padding: "24px",
-              marginBottom: "24px",
-              background: "#f8fafc"
-            }}>
-              <h3 style={{ 
-                margin: "0 0 16px",
-                fontSize: "18px",
-                color: "#334155"
-              }}>
-                ✅ {previewNotes.length} nota{previewNotes.length !== 1 ? "s" : ""} detectada{previewNotes.length !== 1 ? "s" : ""}
-              </h3>
-
-              <div style={{ 
-                display: "grid", 
-                gap: "16px",
-                maxHeight: "400px",
-                overflowY: "auto"
-              }}>
-                {previewNotes.map((note, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      background: "white",
-                      padding: "16px",
-                      borderRadius: "8px",
-                      border: "1px solid #e2e8f0"
-                    }}
-                  >
-                    <div style={{ 
-                      fontWeight: "600", 
-                      marginBottom: "8px",
-                      fontSize: "16px",
-                      color: "#1e293b"
-                    }}>
-                      {note.title}
-                    </div>
-                    <div style={{ 
-                      fontSize: "14px", 
-                      color: "#64748b",
-                      marginBottom: "8px"
-                    }}>
-                      📅 {new Date(note.date).toLocaleDateString("es-PY")} • 
-                      🏷️ {note.tag} •
-                      ✓ {note.clientStatus === "realizado" ? "Realizado" : note.clientStatus === "no_realizado" ? "No realizado" : "Postergado"}
-                    </div>
-                    {note.clientResponsible && (
-                      <div style={{ 
-                        fontSize: "14px", 
-                        color: "#64748b",
-                        marginBottom: "8px"
-                      }}>
-                        👤 {note.clientResponsible}
-                      </div>
+                <div style={{ 
+                  border: '3px dashed #cbd5e0', 
+                  borderRadius: '12px', 
+                  padding: '3rem',
+                  textAlign: 'center',
+                  background: processing ? '#f7fafc' : '#ffffff',
+                  cursor: processing ? 'wait' : 'pointer',
+                  opacity: processing ? 0.6 : 1
+                }}>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf"
+                    onChange={handleFileUpload}
+                    disabled={processing}
+                    style={{ display: 'none' }}
+                    id="fileInput"
+                  />
+                  <label htmlFor="fileInput" style={{ cursor: processing ? 'wait' : 'pointer' }}>
+                    {processing ? (
+                      <>
+                        <Loader size={48} color="#667eea" style={{ marginBottom: '1rem', animation: 'spin 1s linear infinite' }} />
+                        <div style={{ fontSize: '1.25rem', fontWeight: '600', color: '#2d3748', marginBottom: '0.5rem' }}>
+                          Procesando PDFs...
+                        </div>
+                        <div style={{ color: '#718096' }}>
+                          Extrayendo texto y estructurando datos
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={48} color="#667eea" style={{ marginBottom: '1rem' }} />
+                        <div style={{ fontSize: '1.25rem', fontWeight: '600', color: '#2d3748', marginBottom: '0.5rem' }}>
+                          Subir PDFs de Notes
+                        </div>
+                        <div style={{ color: '#718096' }}>
+                          Selecciona múltiples archivos PDF
+                        </div>
+                      </>
                     )}
-                    <div style={{ 
-                      fontSize: "14px", 
-                      color: "#475569",
-                      lineHeight: "1.6"
-                    }}>
-                      {note.summary.substring(0, 200)}
-                      {note.summary.length > 200 ? "..." : ""}
+                  </label>
+                </div>
+
+                {pdfs.length > 0 && (
+                  <div style={{ marginTop: '2rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#1a202c' }}>
+                      Archivos procesados ({pdfs.length})
+                    </h3>
+                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                      {pdfs.map((pdf, idx) => (
+                        <div key={idx} style={{ 
+                          background: '#f7fafc', 
+                          padding: '1rem', 
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem'
+                        }}>
+                          <CheckCircle size={20} color="#48bb78" />
+                          <span style={{ fontWeight: '500', color: '#2d3748' }}>{pdf.name}</span>
+                          <span style={{ marginLeft: 'auto', color: '#718096', fontSize: '0.875rem' }}>
+                            {Math.round(pdf.text.length / 1000)}k caracteres
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
+            )}
 
-              {/* Botón importar */}
-              <button
-                onClick={handleImport}
-                disabled={importing}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  background: importing ? "#cbd5e1" : "#10b981",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: importing ? "not-allowed" : "pointer",
-                  marginTop: "16px"
-                }}
-              >
-                {importing ? "⏳ Importando..." : `🚀 Importar ${previewNotes.length} sesión${previewNotes.length !== 1 ? "es" : ""} a ${selectedProject}`}
-              </button>
-            </div>
-          )}
+            {activeTab === 'review' && extractedData && (
+              <div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#1a202c' }}>
+                  Paso 2: Revisa y edita los datos extraídos
+                </h2>
 
-          {/* Resultados */}
-          {results && (
-            <div style={{
-              padding: "16px",
-              borderRadius: "8px",
-              background: results.success ? "#d1fae5" : "#fee2e2",
-              border: `2px solid ${results.success ? "#10b981" : "#ef4444"}`,
-              color: results.success ? "#065f46" : "#991b1b"
-            }}>
-              <div style={{ fontWeight: "600", marginBottom: "4px" }}>
-                {results.success ? "✅ Éxito" : "❌ Error"}
+                <div style={{ marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#2d3748' }}>
+                    Clientes ({extractedData.clients.length})
+                  </h3>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr style={{ background: '#f7fafc', borderBottom: '2px solid #e2e8f0' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Cliente</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Organización</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Partner</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Industria</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Fase</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {extractedData.clients.map((client) => {
+                          const phase = extractedData.projectPhases.find(p => 
+                            p.project_name === client.client_name
+                          );
+                          return (
+                            <tr key={client.client_id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input
+                                  type="text"
+                                  value={client.client_name}
+                                  onChange={(e) => updateClient(client.client_id, 'client_name', e.target.value)}
+                                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input
+                                  type="text"
+                                  value={client.organization}
+                                  onChange={(e) => updateClient(client.client_id, 'organization', e.target.value)}
+                                  placeholder="Empresa SA"
+                                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input
+                                  type="text"
+                                  value={client.partner}
+                                  onChange={(e) => updateClient(client.client_id, 'partner', e.target.value)}
+                                  placeholder="Juan Perez"
+                                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <input
+                                  type="text"
+                                  value={client.industry}
+                                  onChange={(e) => updateClient(client.client_id, 'industry', e.target.value)}
+                                  placeholder="Tecnología"
+                                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                />
+                              </td>
+                              <td style={{ padding: '0.75rem' }}>
+                                <span style={{ 
+                                  background: '#667eea', 
+                                  color: 'white', 
+                                  padding: '0.25rem 0.75rem', 
+                                  borderRadius: '12px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: '600'
+                                }}>
+                                  Fase {phase?.current_phase}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', marginBottom: '1rem', color: '#2d3748' }}>
+                    Sesiones ({extractedData.sessions.length})
+                  </h3>
+                  <div style={{ display: 'grid', gap: '1rem', maxHeight: '600px', overflowY: 'auto', padding: '0.5rem' }}>
+                    {extractedData.sessions.map((session) => (
+                      <div key={session.session_id} style={{ 
+                        background: '#f7fafc', 
+                        borderRadius: '8px', 
+                        padding: '1rem',
+                        border: '1px solid #e2e8f0'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                          <div style={{ flex: 1 }}>
+                            <input
+                              type="text"
+                              value={session.title}
+                              onChange={(e) => updateSession(session.session_id, 'title', e.target.value)}
+                              style={{ 
+                                width: '100%', 
+                                padding: '0.5rem', 
+                                border: '1px solid #e2e8f0', 
+                                borderRadius: '4px',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                marginBottom: '0.5rem'
+                              }}
+                            />
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                              <div>
+                                <label style={{ fontSize: '0.75rem', color: '#718096', display: 'block', marginBottom: '0.25rem' }}>
+                                  Fecha
+                                </label>
+                                <input
+                                  type="date"
+                                  value={session.session_date}
+                                  onChange={(e) => updateSession(session.session_id, 'session_date', e.target.value)}
+                                  style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '0.75rem', color: '#718096', display: 'block', marginBottom: '0.25rem' }}>
+                                  Etapa
+                                </label>
+                                <select
+                                  value={session.stage}
+                                  onChange={(e) => updateSession(session.session_id, 'stage', e.target.value)}
+                                  style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                >
+                                  {PHASES.map(p => (
+                                    <option key={p.id} value={p.label}>{p.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label style={{ fontSize: '0.75rem', color: '#718096', display: 'block', marginBottom: '0.25rem' }}>
+                                  Estado
+                                </label>
+                                <select
+                                  value={session.client_status}
+                                  onChange={(e) => updateSession(session.session_id, 'client_status', e.target.value)}
+                                  style={{ padding: '0.5rem', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                >
+                                  <option value="realizado">Realizado</option>
+                                  <option value="postergado">Postergado</option>
+                                  <option value="no_realizado">No realizado</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => deleteSession(session.session_id)}
+                            style={{ 
+                              background: '#fed7d7', 
+                              border: 'none', 
+                              borderRadius: '4px', 
+                              padding: '0.5rem',
+                              cursor: 'pointer',
+                              marginLeft: '1rem',
+                              height: 'fit-content'
+                            }}
+                          >
+                            <Trash2 size={16} color="#c53030" />
+                          </button>
+                        </div>
+                        <textarea
+                          value={session.summary}
+                          onChange={(e) => updateSession(session.session_id, 'summary', e.target.value)}
+                          rows={3}
+                          placeholder="Resumen de la sesión"
+                          style={{ 
+                            width: '100%', 
+                            padding: '0.5rem', 
+                            border: '1px solid #e2e8f0', 
+                            borderRadius: '4px',
+                            fontSize: '0.875rem',
+                            resize: 'vertical'
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <div>{results.message}</div>
-            </div>
-          )}
+            )}
 
-          {/* Instrucciones */}
-          <div style={{
-            marginTop: "32px",
-            padding: "20px",
-            background: "#f1f5f9",
-            borderRadius: "8px",
-            fontSize: "14px",
-            color: "#475569"
-          }}>
-            <h4 style={{ margin: "0 0 12px", color: "#1e293b" }}>
-              📖 Cómo usar el importador:
-            </h4>
-            <ol style={{ margin: 0, paddingLeft: "20px" }}>
-              <li style={{ marginBottom: "8px" }}>
-                Copiá tus notas desde la app Notas de macOS
-              </li>
-              <li style={{ marginBottom: "8px" }}>
-                Pegá el texto en el área de arriba (separá múltiples notas con <code>---</code>)
-              </li>
-              <li style={{ marginBottom: "8px" }}>
-                Click en <strong>"Previsualizar notas"</strong> para verificar que se detectaron correctamente
-              </li>
-              <li style={{ marginBottom: "8px" }}>
-                Revisá la previsualización y ajustá si es necesario
-              </li>
-              <li>
-                Click en <strong>"Importar"</strong> para guardar en la bitácora
-              </li>
-            </ol>
+            {activeTab === 'export' && extractedData && (
+              <div>
+                <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: '#1a202c' }}>
+                  Paso 3: Exporta a Excel para Supabase
+                </h2>
+
+                <div style={{ background: '#ebf4ff', border: '1px solid #bee3f8', borderRadius: '8px', padding: '1.5rem', marginBottom: '2rem' }}>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '1rem', color: '#2c5282' }}>
+                    Archivos que se generarán:
+                  </h3>
+                  <div style={{ display: 'grid', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CheckCircle size={20} color="#48bb78" />
+                      <strong>clientes.xlsx</strong> - {extractedData.clients.length} clientes
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CheckCircle size={20} color="#48bb78" />
+                      <strong>sesiones.xlsx</strong> - {extractedData.sessions.length} sesiones
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CheckCircle size={20} color="#48bb78" />
+                      <strong>fases_proyectos.xlsx</strong> - Estado de proyectos
+                    </div>
+                  </div>
+                </div><button 
+            className="export-button"
+            onClick={exportToExcel}
+            disabled={!selectedProject}
+          >
+            <Download size={20} />
+            Descargar Excel para Supabase
+          </button>
+
+          <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '8px', color: '#166534', fontSize: '0.875rem' }}>
+            El archivo Excel estará listo para importar directo en Supabase Table Editor
+          </div>
+                </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-export default NotesImporter;
