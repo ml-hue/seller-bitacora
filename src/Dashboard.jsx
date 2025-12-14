@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase as sb } from "./supabaseClient";
+import { supabasePublic } from "./supabaseClientPublic";
 import "./index.css";
 
 /* -------------------------------------------------------------
@@ -27,6 +28,7 @@ function Dashboard() {
   const mode = searchParams.get("mode");
   const isClientPortal =
     window.location.host.includes("bitacora-client") || mode === "client";
+    const sb = isClientPortal ? sbPublic : sb;
 
   /* -------------------------------------------------------------
      ESTADOS PRINCIPALES
@@ -82,7 +84,7 @@ function Dashboard() {
   ------------------------------------------------------------- */
   const loadProjects = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("projects")
         .select("id, name, client_name")
         .order("name");
@@ -102,7 +104,7 @@ function Dashboard() {
   }, [selectedProject]);
 
   /* -------------------------------------------------------------
-     CARGAR SESIONES DESDE SUPABASE
+     CARGAR SESIONES DESDE 
   ------------------------------------------------------------- */
   const loadSessions = useCallback(async (projectId) => {
     if (!projectId) return;
@@ -111,7 +113,7 @@ function Dashboard() {
       setSessionsLoading(true);
       setSessionsError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("sessions")
         .select("*")
         .eq("project_id", projectId)
@@ -143,7 +145,7 @@ function Dashboard() {
       setPhaseLoading(true);
       setPhaseError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from("project_phase")
         .select("current_phase")
         .eq("project_name", projectName)
@@ -158,7 +160,7 @@ function Dashboard() {
         setManualPhase(data.current_phase ?? 1);
       } else {
         // Si no existe, crear registro con fase 1
-        const { data: newPhase, error: insertError } = await supabase
+        const { data: newPhase, error: insertError } = await sb
           .from("project_phase")
           .insert([{ 
             project_name: projectName, 
@@ -218,7 +220,7 @@ function Dashboard() {
       try {
         setClientLoading(true);
 
-        const { data, error } = await supabase
+        const { data, error } = await sb
           .from("client_tokens")
           .select("*")
           .eq("token", token)
@@ -247,7 +249,7 @@ function Dashboard() {
         setSelectedProject(data.project_name);
 
         // Obtener el project_id del nombre
-        const { data: projectData } = await supabase
+        const { data: projectData } = await sb
           .from("projects")
           .select("id")
           .eq("name", data.project_name)
@@ -333,7 +335,7 @@ function Dashboard() {
       setSavingPhase(true);
       setPhaseError(null);
 
-      const { error } = await supabase
+      const { error } = await sb
         .from("project_phase")
         .update({
           current_phase: manualPhase,
@@ -353,7 +355,7 @@ function Dashboard() {
   };
 
   /* -------------------------------------------------------------
-     CREAR SESIÓN CON PERSISTENCIA EN SUPABASE
+     CREAR SESIÓN CON PERSISTENCIA EN sb
   ------------------------------------------------------------- */
   const handleCreateSession = async () => {
     if (!selectedProjectId) {
@@ -382,8 +384,8 @@ function Dashboard() {
         client_status: draft.clientStatus,
       };
 
-      // Guardar en Supabase
-      const { data, error } = await supabase
+      // Guardar en sb
+      const { data, error } = await sb
         .from("sessions")
         .insert([newSession])
         .select()
@@ -425,7 +427,7 @@ const handleSharePublicView = async () => {
 
     const project = projects.find(p => p.name === selectedProject);
 
-    const { error } = await supabase
+    const { error } = await sb
       .from("client_tokens")
       .insert([
         {
