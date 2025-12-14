@@ -69,9 +69,9 @@ function Dashboard() {
   /* -------------------------------------------------------------
      ESTADO DERIVADO CON USEMEMO (PERFORMANCE)
   ------------------------------------------------------------- */
-  const projectSessions = useMemo(() => {
-    return sessions.sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [sessions]);
+ const projectSessions = useMemo(() => {
+  return [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
+}, [sessions]);
 
   const activeSession = useMemo(() => {
     return sessions.find((s) => s.id === activeSessionId);
@@ -411,6 +411,50 @@ function Dashboard() {
       setSavingSession(false);
     }
   };
+/* -------------------------------------------------------------
+   COMPARTIR VISTA PÚBLICA (CLIENT PORTAL)
+------------------------------------------------------------- */
+const handleSharePublicView = async () => {
+  if (!selectedProject) {
+    alert("Seleccioná un proyecto primero");
+    return;
+  }
+
+  try {
+    const token = crypto.randomUUID();
+
+    const project = projects.find(p => p.name === selectedProject);
+
+    const { error } = await supabase
+      .from("client_tokens")
+      .insert([
+        {
+          token,
+          project_name: selectedProject,
+          client_name: project?.client_name || "",
+          active: true,
+          expires_at: null, // opcional
+        },
+      ]);
+
+    if (error) throw error;
+
+    const publicUrl = `${window.location.origin.replace(
+      "bitacora",
+      "bitacora-client"
+    )}/?mode=client&token=${token}`;
+
+    await navigator.clipboard.writeText(publicUrl);
+
+    alert(
+      "✅ Vista pública generada y copiada al portapapeles:\n\n" +
+        publicUrl
+    );
+  } catch (error) {
+    console.error("Error generando vista pública:", error);
+    alert("No se pudo generar el enlace público");
+  }
+};
 
   /* -------------------------------------------------------------
      CAMBIAR PROYECTO
@@ -456,7 +500,12 @@ function Dashboard() {
                 ))}
               </select>
 
-              <button className="share-button">Compartir vista pública</button>
+<button
+  className="share-button"
+  onClick={handleSharePublicView}
+>
+  Compartir vista pública
+</button>
             </>
           )}
 
