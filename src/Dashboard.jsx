@@ -3,9 +3,10 @@ import { supabase as sb } from "./supabaseClient";
 import { supabasePublic } from "./supabaseClientPublic";
 import "./index.css";
 
-/* -------------------------------------------------------------
-   FASES Y POSICIONES DEL ROADMAP CURVO
-------------------------------------------------------------- */
+/* =============================================================
+   CONFIGURACIÓN GENERAL
+============================================================= */
+
 const PHASES = [
   { id: 1, label: "Diagnóstico" },
   { id: 2, label: "Plan estratégico" },
@@ -20,32 +21,38 @@ const PHASE_MARKERS = [
   { id: 4, x: 880, y: 120 },
 ];
 
-function Dashboard() {
-  /* -------------------------------------------------------------
-     MODO CLIENTE / MODO INTERNO
-  ------------------------------------------------------------- */
-  const searchParams = new URLSearchParams(window.location.search);
-  const mode = searchParams.get("mode");
-  const isClientPortal =
-    window.location.host.includes("bitacora-client") || mode === "client";
-    const sb = isClientPortal ? sbPublic : sb;
+/* =============================================================
+   COMPONENTE PRINCIPAL
+============================================================= */
 
-  /* -------------------------------------------------------------
+function Dashboard({ clientMode = false, token = null }) {
+  console.log("🚀 Dashboard render", { clientMode, token });
+
+  const db = clientMode ? supabasePublic : sb;
+
+  /* =============================================================
      ESTADOS PRINCIPALES
-  ------------------------------------------------------------- */
+  ============================================================= */
+
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState(null);
-  const [projectPhase, setProjectPhase] = useState(null);
-  const [phaseLoading, setPhaseLoading] = useState(true);
 
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState(null);
-
   const [activeSessionId, setActiveSessionId] = useState(null);
 
-  /* BORRADOR NUEVA SESIÓN */
+  const [projectPhase, setProjectPhase] = useState(null);
+  const [manualPhase, setManualPhase] = useState(null);
+  const [phaseLoading, setPhaseLoading] = useState(true);
+  const [savingPhase, setSavingPhase] = useState(false);
+  const [phaseError, setPhaseError] = useState(null);
+
+  const [clientInfo, setClientInfo] = useState(null);
+  const [clientLoading, setClientLoading] = useState(clientMode);
+  const [clientError, setClientError] = useState(null);
+
   const [draft, setDraft] = useState({
     title: "",
     date: new Date().toISOString().slice(0, 10),
@@ -58,144 +65,92 @@ function Dashboard() {
   const [savingSession, setSavingSession] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  /* PORTAL CLIENTE */
-  const [clientInfo, setClientInfo] = useState(null);
-  const [clientLoading, setClientLoading] = useState(isClientPortal);
-  const [clientError, setClientError] = useState(null);
+  /* =============================================================
+     DERIVADOS (MEMO)
+  ============================================================= */
 
-  /* CONTROL MANUAL DE FASE */
-  const [manualPhase, setManualPhase] = useState(null);
-  const [savingPhase, setSavingPhase] = useState(false);
-  const [phaseError, setPhaseError] = useState(null);
-
-  /* -------------------------------------------------------------
-     ESTADO DERIVADO CON USEMEMO (PERFORMANCE)
-  ------------------------------------------------------------- */
- const projectSessions = useMemo(() => {
-  return [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
-}, [sessions]);
+  const projectSessions = useMemo(() => {
+    return [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
+  }, [sessions]);
 
   const activeSession = useMemo(() => {
-    return sessions.find((s) => s.id === activeSessionId);
+    return sessions.find((s) => s.id === activeSessionId) || null;
   }, [sessions, activeSessionId]);
 
-  /* -------------------------------------------------------------
-     CARGAR PROYECTOS
-  ------------------------------------------------------------- */
+  /* =============================================================
+     LOADERS (SUPABASE)
+  ============================================================= */
+
   const loadProjects = useCallback(async () => {
-    try {
-      const { data, error } = await sb
-        .from("projects")
-        .select("id, name, client_name")
-        .order("name");
+    const { data, error } = await sb
+      .from("projects")
+      .select("id, name, client_name")
+      .order("name");
 
-      if (error) throw error;
-
-      setProjects(data || []);
-      
-      // Seleccionar primer proyecto por defecto
-      if (data && data.length > 0 && !selectedProject) {
-        setSelectedProject(data[0].name);
-        setSelectedProjectId(data[0].id);
-      }
-    } catch (error) {
+    if (error) {
       console.error("Error cargando proyectos:", error);
+      return;
+    }
+
+    setProjects(data || []);
+
+    if (data?.length && !selectedProject) {
+      setSelectedProject(data[0].name);
+      setSelectedProjectId(data[0].id);
     }
   }, [selectedProject]);
 
-  /* -------------------------------------------------------------
-     CARGAR SESIONES DESDE 
-  ------------------------------------------------------------- */
   const loadSessions = useCallback(async (projectId) => {
     if (!projectId) return;
 
-    try {
-      setSessionsLoading(true);
-      setSessionsError(null);
+    setSessionsLoading(true);
+    setSessionsError(null);
 
-      const { data, error } = await sb
-        .from("sessions")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("date", { ascending: false });
+    const { data, error } = await db
+      .from("sessions")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("date", { ascending: false });
 
-      if (error) throw error;
-
+    if (error) {
+      setSessionsError("Error cargando sesiones");
+    } else {
       setSessions(data || []);
-      if (data && data.length > 0) {
-        setActiveSessionId(data[0].id);
-      } else {
-        setActiveSessionId(null);
-      }
-    } catch (error) {
-      console.error("Error cargando sesiones:", error);
-      setSessionsError("No pudimos cargar las sesiones. Intentá de nuevo.");
-    } finally {
-      setSessionsLoading(false);
+      setActiveSessionId(data?.[0]?.id || null);
     }
-  }, []);
 
-  /* -------------------------------------------------------------
-     CARGAR FASE ACTUAL
-  ------------------------------------------------------------- */
+    setSessionsLoading(false);
+  }, [db]);
+
   const loadPhase = useCallback(async (projectName) => {
     if (!projectName) return;
 
-    try {
-      setPhaseLoading(true);
-      setPhaseError(null);
+    setPhaseLoading(true);
 
-      const { data, error } = await sb
-        .from("project_phase")
-        .select("current_phase")
-        .eq("project_name", projectName)
-        .maybeSingle();
+    const { data } = await db
+      .from("project_phase")
+      .select("current_phase")
+      .eq("project_name", projectName)
+      .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+    const phase = data?.current_phase ?? 1;
+    setProjectPhase(phase);
+    setManualPhase(phase);
+    setPhaseLoading(false);
+  }, [db]);
 
-      if (data) {
-        setProjectPhase(data.current_phase ?? 1);
-        setManualPhase(data.current_phase ?? 1);
-      } else {
-        // Si no existe, crear registro con fase 1
-        const { data: newPhase, error: insertError } = await sb
-          .from("project_phase")
-          .insert([{ 
-            project_name: projectName, 
-            current_phase: 1 
-          }])
-          .select()
-          .single();
+  /* =============================================================
+     EFECTOS
+  ============================================================= */
 
-        if (insertError) throw insertError;
-
-        setProjectPhase(1);
-        setManualPhase(1);
-      }
-    } catch (error) {
-      console.error("Error cargando fase:", error);
-      setPhaseError("Error cargando la fase del proyecto");
-      setProjectPhase(1);
-      setManualPhase(1);
-    } finally {
-      setPhaseLoading(false);
-    }
-  }, []);
-
-  /* -------------------------------------------------------------
-     EFECTOS Y CARGA INICIAL
-  ------------------------------------------------------------- */
-
-  // Cargar proyectos al inicio (solo modo interno)
+  // MODO INTERNO → cargar proyectos
   useEffect(() => {
-    if (!isClientPortal) {
+    if (!clientMode) {
       loadProjects();
     }
-  }, [isClientPortal, loadProjects]);
+  }, [clientMode, loadProjects]);
 
-  // Cargar sesiones y fase cuando cambia el proyecto
+  // Cargar sesiones + fase cuando hay proyecto
   useEffect(() => {
     if (selectedProjectId && selectedProject) {
       loadSessions(selectedProjectId);
@@ -203,76 +158,64 @@ function Dashboard() {
     }
   }, [selectedProjectId, selectedProject, loadSessions, loadPhase]);
 
-  // Validar token cliente con seguridad mejorada
+  // MODO CLIENTE → validar token y cargar proyecto
   useEffect(() => {
-    if (!isClientPortal) return;
+    if (!clientMode || !token) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-
-    if (!token) {
-      setClientError("No encontramos un token válido.");
-      setClientLoading(false);
-      return;
-    }
-
-    const fetchClient = async () => {
+    const loadClient = async () => {
       try {
         setClientLoading(true);
 
-        const { data, error } = await sb
+        const { data, error } = await db
           .from("client_tokens")
-          .select("*")
+          .select("project_name, client_name, expires_at")
           .eq("token", token)
           .eq("active", true)
           .single();
 
         if (!data || error) {
-          setClientError(
-            "El enlace expiró o no es válido. Solicitá un nuevo acceso."
-          );
+          setClientError("El enlace no es válido o expiró.");
           setClientLoading(false);
           return;
         }
 
-        // Verificar expiración del token
         if (data.expires_at) {
           const expiresAt = new Date(data.expires_at);
           if (expiresAt < new Date()) {
-            setClientError("Este enlace ha expirado. Solicitá uno nuevo.");
+            setClientError("Este enlace ha expirado.");
             setClientLoading(false);
             return;
           }
         }
 
-        setClientInfo(data);
+        setClientInfo({ client_name: data.client_name });
         setSelectedProject(data.project_name);
 
-        // Obtener el project_id del nombre
-        const { data: projectData } = await sb
+        const { data: project } = await db
           .from("projects")
           .select("id")
           .eq("name", data.project_name)
           .single();
 
-        if (projectData) {
-          setSelectedProjectId(projectData.id);
+        if (project) {
+          setSelectedProjectId(project.id);
         }
 
         setClientLoading(false);
-      } catch (error) {
-        console.error("Error validando token:", error);
-        setClientError("Hubo un problema validando tu acceso.");
+      } catch (err) {
+        console.error("Error cliente:", err);
+        setClientError("Error validando acceso.");
         setClientLoading(false);
       }
     };
 
-    fetchClient();
-  }, [isClientPortal]);
+    loadClient();
+  }, [clientMode, token, db]);
 
-  /* -------------------------------------------------------------
+  /* =============================================================
      HELPERS
-  ------------------------------------------------------------- */
+  ============================================================= */
+
   const getPhaseStatus = (phaseId) => {
     if (!projectPhase) return "pending";
     if (phaseId < projectPhase) return "done";
@@ -300,34 +243,10 @@ function Dashboard() {
       ? "Postergado"
       : "No realizado";
 
-  /* -------------------------------------------------------------
-     VALIDACIÓN DE FORMULARIO
-  ------------------------------------------------------------- */
-  const validateSession = (sessionData) => {
-    const errors = [];
+  /* =============================================================
+     ACCIONES
+  ============================================================= */
 
-    if (!sessionData.title || sessionData.title.trim().length < 3) {
-      errors.push("El título debe tener al menos 3 caracteres");
-    }
-
-    if (sessionData.title.length > 200) {
-      errors.push("El título no puede exceder 200 caracteres");
-    }
-
-    if (!sessionData.summary || sessionData.summary.trim().length < 10) {
-      errors.push("El resumen debe tener al menos 10 caracteres");
-    }
-
-    if (!sessionData.date) {
-      errors.push("La fecha es obligatoria");
-    }
-
-    return errors;
-  };
-
-  /* -------------------------------------------------------------
-     GUARDAR FASE MANUAL
-  ------------------------------------------------------------- */
   const saveManualPhase = async () => {
     if (!manualPhase || !selectedProject) return;
 
@@ -337,36 +256,33 @@ function Dashboard() {
 
       const { error } = await sb
         .from("project_phase")
-        .update({
-          current_phase: manualPhase,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ current_phase: manualPhase })
         .eq("project_name", selectedProject);
 
       if (error) throw error;
 
       setProjectPhase(manualPhase);
-    } catch (error) {
-      console.error("Error actualizando fase:", error);
-      setPhaseError("No pudimos guardar la fase. Intentá de nuevo.");
+    } catch (err) {
+      console.error(err);
+      setPhaseError("No se pudo guardar la fase.");
     } finally {
       setSavingPhase(false);
     }
   };
 
-  /* -------------------------------------------------------------
-     CREAR SESIÓN CON PERSISTENCIA EN sb
-  ------------------------------------------------------------- */
-  const handleCreateSession = async () => {
-    if (!selectedProjectId) {
-      setSaveError("No hay un proyecto seleccionado");
-      return;
-    }
+  const validateSession = (s) => {
+    if (!s.title || s.title.trim().length < 3) return false;
+    if (!s.summary || s.summary.trim().length < 10) return false;
+    if (!s.date) return false;
+    return true;
+  };
 
-    // Validación
-    const errors = validateSession(draft);
-    if (errors.length > 0) {
-      setSaveError(errors.join(". "));
+  const handleCreateSession = async () => {
+    if (clientMode) return;
+    if (!selectedProjectId) return;
+
+    if (!validateSession(draft)) {
+      setSaveError("Completá correctamente los campos.");
       return;
     }
 
@@ -374,30 +290,27 @@ function Dashboard() {
       setSavingSession(true);
       setSaveError(null);
 
-      const newSession = {
-        project_id: selectedProjectId,
-        title: draft.title.trim(),
-        date: draft.date,
-        tag: draft.tag,
-        summary: draft.summary.trim(),
-        client_responsible: draft.clientResponsible || null,
-        client_status: draft.clientStatus,
-      };
-
-      // Guardar en sb
       const { data, error } = await sb
         .from("sessions")
-        .insert([newSession])
+        .insert([
+          {
+            project_id: selectedProjectId,
+            title: draft.title.trim(),
+            date: draft.date,
+            tag: draft.tag,
+            summary: draft.summary.trim(),
+            client_responsible: draft.clientResponsible || null,
+            client_status: draft.clientStatus,
+          },
+        ])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Actualizar estado local
-      setSessions([data, ...sessions]);
+      setSessions((prev) => [data, ...prev]);
       setActiveSessionId(data.id);
 
-      // Limpiar formulario
       setDraft({
         title: "",
         date: new Date().toISOString().slice(0, 10),
@@ -406,94 +319,71 @@ function Dashboard() {
         clientResponsible: "",
         clientStatus: "postergado",
       });
-    } catch (error) {
-      console.error("Error guardando sesión:", error);
-      setSaveError("No pudimos guardar la sesión. Verificá tu conexión.");
+    } catch (err) {
+      console.error(err);
+      setSaveError("Error guardando sesión.");
     } finally {
       setSavingSession(false);
     }
   };
-/* -------------------------------------------------------------
-   COMPARTIR VISTA PÚBLICA (CLIENT PORTAL)
-------------------------------------------------------------- */
-const handleSharePublicView = async () => {
-  if (!selectedProject) {
-    alert("Seleccioná un proyecto primero");
-    return;
-  }
 
-  try {
-    const token = crypto.randomUUID();
+  const handleSharePublicView = async () => {
+    if (!selectedProject) return;
 
-    const project = projects.find(p => p.name === selectedProject);
+    const newToken = crypto.randomUUID();
+    const project = projects.find((p) => p.name === selectedProject);
 
-    const { error } = await sb
-      .from("client_tokens")
-      .insert([
-        {
-          token,
-          project_name: selectedProject,
-          client_name: project?.client_name || "",
-          active: true,
-          expires_at: null, // opcional
-        },
-      ]);
+    await sb.from("client_tokens").insert([
+      {
+        token: newToken,
+        project_name: selectedProject,
+        client_name: project?.client_name || "",
+        active: true,
+      },
+    ]);
 
-    if (error) throw error;
-
-    const publicUrl = `${window.location.origin.replace(
+    const url = `${window.location.origin.replace(
       "bitacora",
       "bitacora-client"
-    )}/?mode=client&token=${token}`;
+    )}/?token=${newToken}`;
 
-    await navigator.clipboard.writeText(publicUrl);
+    await navigator.clipboard.writeText(url);
+    alert("Link copiado:\n" + url);
+  };
 
-    alert(
-      "✅ Vista pública generada y copiada al portapapeles:\n\n" +
-        publicUrl
-    );
-  } catch (error) {
-    console.error("Error generando vista pública:", error);
-    alert("No se pudo generar el enlace público");
-  }
-};
-
-  /* -------------------------------------------------------------
-     CAMBIAR PROYECTO
-  ------------------------------------------------------------- */
-  const handleProjectChange = (projectName) => {
-    const project = projects.find(p => p.name === projectName);
-    if (project) {
-      setSelectedProject(project.name);
-      setSelectedProjectId(project.id);
+  const handleProjectChange = (name) => {
+    const p = projects.find((x) => x.name === name);
+    if (p) {
+      setSelectedProject(p.name);
+      setSelectedProjectId(p.id);
     }
   };
 
-  /* -------------------------------------------------------------
-     RENDER PRINCIPAL
-  ------------------------------------------------------------- */
+  /* =============================================================
+     RENDER
+  ============================================================= */
+
   return (
     <div className="app-root">
-      {/* -------------------------------- TOP BAR ------------------------------- */}
+      {/* TOP BAR */}
       <header className="topbar">
         <div className="topbar-left">
           <div className="topbar-logo">S</div>
           <div className="topbar-text">
             <span className="topbar-overline">SELLER CONSULTING</span>
             <span className="topbar-title">
-              {isClientPortal ? "Bitácora del proyecto" : "Bitácora de proyectos"}
+              {clientMode ? "Bitácora del proyecto" : "Bitácora de proyectos"}
             </span>
           </div>
         </div>
 
         <div className="topbar-right">
-          {!isClientPortal && (
+          {!clientMode && (
             <>
               <select
                 className="project-select"
                 value={selectedProject || ""}
                 onChange={(e) => handleProjectChange(e.target.value)}
-                aria-label="Seleccionar proyecto"
               >
                 {projects.map((p) => (
                   <option key={p.id} value={p.name}>
@@ -502,16 +392,13 @@ const handleSharePublicView = async () => {
                 ))}
               </select>
 
-<button
-  className="share-button"
-  onClick={handleSharePublicView}
->
-  Compartir vista pública
-</button>
+              <button className="share-button" onClick={handleSharePublicView}>
+                Compartir vista pública
+              </button>
             </>
           )}
 
-          {isClientPortal && clientInfo && (
+          {clientMode && clientInfo && (
             <div className="client-chip">
               Cliente: <strong>{clientInfo.client_name}</strong>
             </div>
@@ -519,40 +406,33 @@ const handleSharePublicView = async () => {
         </div>
       </header>
 
-      {/* -------------------------------- LAYOUT -------------------------------- */}
+      {/* LAYOUT */}
       <main className="layout">
-        {/* --------------------- COLUMNA IZQUIERDA (INTERNAL) -------------------- */}
-        {!isClientPortal && (
+        {/* COLUMNA IZQUIERDA */}
+        {!clientMode && (
           <section className="column column-left">
-            {/* --------------------- NUEVA SESIÓN --------------------- */}
+            {/* NUEVA SESIÓN */}
             <div className="card card-new-note">
               <div className="card-header">
                 <div>
                   <div className="card-overline">NUEVA NOTA DE SESIÓN</div>
                   <div className="card-subtitle">
-                    Registra acuerdos, próximos pasos y decisiones clave.
+                    Acuerdos, próximos pasos y decisiones.
                   </div>
                 </div>
                 <span className="badge-interno">Interno Seller</span>
               </div>
 
               <div className="card-body">
-                {saveError && (
-                  <div className="error-message" role="alert">
-                    {saveError}
-                  </div>
-                )}
+                {saveError && <div className="error-message">{saveError}</div>}
 
                 <input
                   className="field-input"
-                  placeholder="Título de la sesión"
+                  placeholder="Título"
                   value={draft.title}
                   onChange={(e) =>
                     setDraft({ ...draft, title: e.target.value })
                   }
-                  maxLength={200}
-                  aria-label="Título de la sesión"
-                  disabled={savingSession}
                 />
 
                 <div className="field-row">
@@ -566,10 +446,8 @@ const handleSharePublicView = async () => {
                       onChange={(e) =>
                         setDraft({ ...draft, date: e.target.value })
                       }
-                      disabled={savingSession}
                     />
                   </div>
-
                   <div className="field-group">
                     <label htmlFor="session-tag">Etiqueta</label>
                     <input
@@ -579,7 +457,6 @@ const handleSharePublicView = async () => {
                       onChange={(e) =>
                         setDraft({ ...draft, tag: e.target.value })
                       }
-                      disabled={savingSession}
                     />
                   </div>
                 </div>
@@ -597,7 +474,6 @@ const handleSharePublicView = async () => {
                           clientResponsible: e.target.value,
                         })
                       }
-                      disabled={savingSession}
                     />
                   </div>
 
@@ -610,7 +486,6 @@ const handleSharePublicView = async () => {
                       onChange={(e) =>
                         setDraft({ ...draft, clientStatus: e.target.value })
                       }
-                      disabled={savingSession}
                     >
                       <option value="realizado">Realizado</option>
                       <option value="postergado">Postergado</option>
@@ -622,28 +497,24 @@ const handleSharePublicView = async () => {
                 <textarea
                   className="field-textarea"
                   rows={3}
-                  placeholder="Resumen (mínimo 10 caracteres)..."
+                  placeholder="Resumen..."
                   value={draft.summary}
                   onChange={(e) =>
                     setDraft({ ...draft, summary: e.target.value })
                   }
-                  aria-label="Resumen de la sesión"
-                  disabled={savingSession}
                 />
 
                 <button
-                  className={`primary-button ${
-                    !draft.title.trim() || savingSession ? "primary-button--disabled" : ""
-                  }`}
-                  disabled={!draft.title.trim() || savingSession}
+                  className="primary-button"
                   onClick={handleCreateSession}
+                  disabled={savingSession}
                 >
                   {savingSession ? "Guardando..." : "+ Guardar nota"}
                 </button>
               </div>
             </div>
 
-            {/* --------------------- LISTA DE SESIONES --------------------- */}
+            {/* LISTA DE SESIONES */}
             <div className="card card-notes-list">
               <div className="card-header card-header--small">
                 <div className="card-overline">NOTAS DE SESIÓN</div>
@@ -653,28 +524,26 @@ const handleSharePublicView = async () => {
               {sessionsLoading ? (
                 <div className="notes-loading">Cargando sesiones...</div>
               ) : sessionsError ? (
-                <div className="notes-error" role="alert">
-                  {sessionsError}
-                </div>
+                <div className="notes-error">{sessionsError}</div>
               ) : (
                 <div className="notes-list">
-                  {projectSessions.map((session) => (
+                  {projectSessions.map((s) => (
                     <div
-                      key={session.id}
+                      key={s.id}
                       className={`note-item ${
-                        session.id === activeSessionId ? "note-item--active" : ""
+                        s.id === activeSessionId ? "note-item--active" : ""
                       }`}
-                      onClick={() => setActiveSessionId(session.id)}
+                      onClick={() => setActiveSessionId(s.id)}
                       role="button"
                       tabIndex={0}
                       onKeyPress={(e) => {
-                        if (e.key === "Enter") setActiveSessionId(session.id);
+                        if (e.key === "Enter") setActiveSessionId(s.id);
                       }}
                     >
                       <div className="note-item-top">
-                        <div className="note-title">{session.title}</div>
+                        <div className="note-title">{s.title}</div>
                         <div className="note-date">
-                          {new Date(session.date).toLocaleDateString("es-PY", {
+                          {new Date(s.date).toLocaleDateString("es-PY", {
                             day: "2-digit",
                             month: "short",
                           })}
@@ -682,13 +551,13 @@ const handleSharePublicView = async () => {
                       </div>
 
                       <div className="note-tags">
-                        <span className="tag">{session.tag}</span>
+                        <span className="tag">{s.tag}</span>
                         <span className="tag tag--status">
-                          {formatClientStatus(session.client_status)}
+                          {formatClientStatus(s.client_status)}
                         </span>
                       </div>
 
-                      <div className="note-summary">{session.summary}</div>
+                      <div className="note-summary">{s.summary}</div>
                     </div>
                   ))}
                 </div>
@@ -704,14 +573,14 @@ const handleSharePublicView = async () => {
           </section>
         )}
 
-        {/* ---------------------- COLUMNA DERECHA ---------------------- */}
+        {/* COLUMNA DERECHA */}
         <section className="column column-right">
-          {/* ------------------- RESUMEN DEL PROYECTO ------------------- */}
+          {/* RESUMEN */}
           <div className="card card-project-summary">
             <div className="summary-header">
               <div>
                 <div className="card-overline">
-                  {isClientPortal ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}
+                  {clientMode ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}
                 </div>
 
                 <h1 className="project-title">
@@ -719,7 +588,7 @@ const handleSharePublicView = async () => {
                 </h1>
 
                 <p className="project-description">
-                  {isClientPortal
+                  {clientMode
                     ? "Aquí verás los principales hitos, acuerdos y avances del proyecto."
                     : "Resumen ejecutivo del avance del proyecto para cliente."}
                 </p>
@@ -741,9 +610,8 @@ const handleSharePublicView = async () => {
             </div>
           </div>
 
-          {/* ---------------- ROADMAP CURVO + CONTROL MANUAL ---------------- */}
+          {/* ROADMAP */}
           <div className="card card-phase-roadmap card-phase-roadmap--curved">
-            {/* ----- TITULO ----- */}
             <div className="phase-header phase-header--curved">
               <div>
                 <div className="card-overline">AVANCE DEL PROYECTO</div>
@@ -779,8 +647,7 @@ const handleSharePublicView = async () => {
               </div>
             </div>
 
-            {/* ----- CONTROL MANUAL (SOLO INTERNO) ----- */}
-            {!isClientPortal && (
+            {!clientMode && (
               <div className="manual-phase-control">
                 <h3 className="manual-phase-title">Control manual de fase</h3>
                 <p className="manual-phase-description">
@@ -825,7 +692,7 @@ const handleSharePublicView = async () => {
               </div>
             )}
 
-            {/* ----- ROADMAP CURVO SVG ----- */}
+            {/* ROADMAP SVG */}
             <div className="phase-curve-wrapper">
               <svg
                 viewBox="0 0 960 220"
@@ -917,15 +784,15 @@ const handleSharePublicView = async () => {
             </div>
           </div>
 
-          {/* ---------------------------- TIMELINE ---------------------------- */}
+          {/* TIMELINE */}
           <div className="card card-timeline">
-            {isClientPortal && clientLoading && (
+            {clientMode && clientLoading && (
               <div className="timeline-empty">
                 Validando tu acceso como cliente...
               </div>
             )}
 
-            {isClientPortal && !clientLoading && clientError && (
+            {clientMode && !clientLoading && clientError && (
               <div className="timeline-empty" role="alert">
                 {clientError}
                 <br />
@@ -937,7 +804,7 @@ const handleSharePublicView = async () => {
               </div>
             )}
 
-            {(!isClientPortal || (!clientLoading && !clientError)) && (
+            {(!clientMode || (!clientLoading && !clientError)) && (
               <>
                 {sessionsLoading ? (
                   <div className="timeline-empty">Cargando bitácora...</div>
