@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase as sb } from "./supabaseClient";
-import { supabasePublic } from "./supabaseClientPublic";
+import { getSupabasePublic } from "./supabaseClientPublic";
+import NotesImporter from "./NotesImporter"; // opcional: sólo si lo estás usando
 import "./index.css";
 
 /* =============================================================
@@ -26,9 +27,9 @@ const PHASE_MARKERS = [
 ============================================================= */
 
 function Dashboard({ clientMode = false, token = null }) {
-  console.log("🚀 Dashboard render", { clientMode, token });
-
-  const db = clientMode ? supabasePublic : sb;
+  // ...
+  // Usar getSupabasePublic() en tiempo de ejecución para crear el cliente sólo si es necesario
+  const db = clientMode ? getSupabasePublic() : sb;
 
   /* =============================================================
      ESTADOS PRINCIPALES
@@ -65,6 +66,9 @@ function Dashboard({ clientMode = false, token = null }) {
   const [savingSession, setSavingSession] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
+  // state to show/hide the NotesImporter
+  const [showImporter, setShowImporter] = useState(false);
+
   /* =============================================================
      DERIVADOS (MEMO)
   ============================================================= */
@@ -100,44 +104,50 @@ function Dashboard({ clientMode = false, token = null }) {
     }
   }, [selectedProject]);
 
-  const loadSessions = useCallback(async (projectId) => {
-    if (!projectId) return;
+  const loadSessions = useCallback(
+    async (projectId) => {
+      if (!projectId) return;
 
-    setSessionsLoading(true);
-    setSessionsError(null);
+      setSessionsLoading(true);
+      setSessionsError(null);
 
-    const { data, error } = await db
-      .from("sessions")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("date", { ascending: false });
+      const { data, error } = await db
+        .from("sessions")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("date", { ascending: false });
 
-    if (error) {
-      setSessionsError("Error cargando sesiones");
-    } else {
-      setSessions(data || []);
-      setActiveSessionId(data?.[0]?.id || null);
-    }
+      if (error) {
+        setSessionsError("Error cargando sesiones");
+      } else {
+        setSessions(data || []);
+        setActiveSessionId(data?.[0]?.id || null);
+      }
 
-    setSessionsLoading(false);
-  }, [db]);
+      setSessionsLoading(false);
+    },
+    [db]
+  );
 
-  const loadPhase = useCallback(async (projectName) => {
-    if (!projectName) return;
+  const loadPhase = useCallback(
+    async (projectName) => {
+      if (!projectName) return;
 
-    setPhaseLoading(true);
+      setPhaseLoading(true);
 
-    const { data } = await db
-      .from("project_phase")
-      .select("current_phase")
-      .eq("project_name", projectName)
-      .maybeSingle();
+      const { data } = await db
+        .from("project_phase")
+        .select("current_phase")
+        .eq("project_name", projectName)
+        .maybeSingle();
 
-    const phase = data?.current_phase ?? 1;
-    setProjectPhase(phase);
-    setManualPhase(phase);
-    setPhaseLoading(false);
-  }, [db]);
+      const phase = data?.current_phase ?? 1;
+      setProjectPhase(phase);
+      setManualPhase(phase);
+      setPhaseLoading(false);
+    },
+    [db]
+  );
 
   /* =============================================================
      EFECTOS
@@ -328,40 +338,84 @@ function Dashboard({ clientMode = false, token = null }) {
   };
 
   const handleSharePublicView = async () => {
-    if (!selectedProject) return;
+  if (!selectedProject) return;
 
-    const newToken = crypto.randomUUID();
+  try {
+    // Generar token único
+    const newToken = crypto?.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
     const project = projects.find((p) => p.name === selectedProject);
 
-    await sb.from("client_tokens").insert([
+    // Fecha de expiración opcional: 7 días desde hoy
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 7);
+
+    // Inserta el token en la tabla client_tokens (usa el cliente interno sb)
+    const { error } = await sb.from("client_tokens").insert([
       {
         token: newToken,
         project_name: selectedProject,
         client_name: project?.client_name || "",
         active: true,
+        expires_at: expires.toISOString(),
       },
     ]);
 
-    const url = `${window.location.origin.replace(
-      "bitacora",
-      "bitacora-client"
-    )}/?token=${newToken}`;
-
-    await navigator.clipboard.writeText(url);
-    alert("Link copiado:\n" + url);
-  };
-
-  const handleProjectChange = (name) => {
-    const p = projects.find((x) => x.name === name);
-    if (p) {
-      setSelectedProject(p.name);
-      setSelectedProjectId(p.id);
+    if (error) {
+      console.error("Error creando token público:", error);
+      alert("No se pudo generar el enlace público.");
+      return;
     }
-  };
+
+    // Construir URL simple usando el mismo origen y query param ?token=
+    const url = `${window.location.origin}/?token=${newToken}`;
+
+    // Copiar al portapapeles y notificar
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Link copiado:\n" + url);
+    } catch (err) {
+      // Si falla el clipboard, mostrar la URL para copiar manualmente
+      console.warn("No se pudo copiar al portapapeles:", err);
+      prompt("Copia este enlace:", url);
+    }
+  } catch (err) {
+    console.error("Error generando link público:", err);
+    alert("Ocurrió un error generando el enlace público.");
+  }
+};
 
   /* =============================================================
      RENDER
   ============================================================= */
+
+  // If importer is open, show it as a full-screen view
+  if (showImporter) {
+    return (
+      <div className="importer-screen">
+        <header className="topbar">
+          <div className="topbar-left">
+            <div className="topbar-logo">S</div>
+            <div className="topbar-text">
+              <span className="topbar-overline">SELLER CONSULTING</span>
+              <span className="topbar-title">Importador de notas</span>
+            </div>
+          </div>
+          <div className="topbar-right">
+            <button
+              className="primary-button"
+              onClick={() => setShowImporter(false)}
+            >
+              ← Volver
+            </button>
+          </div>
+        </header>
+
+        <main style={{ padding: 16 }}>
+          <NotesImporter />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-root">
@@ -394,6 +448,15 @@ function Dashboard({ clientMode = false, token = null }) {
 
               <button className="share-button" onClick={handleSharePublicView}>
                 Compartir vista pública
+              </button>
+
+              {/* IMPORT BUTTON */}
+              <button
+                className="import-button"
+                onClick={() => setShowImporter(true)}
+                title="Importar notas desde PDFs"
+              >
+                Importar notas
               </button>
             </>
           )}

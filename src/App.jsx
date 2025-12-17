@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
 import Dashboard from "./Dashboard";
+import Login from "./Login";
 
-const hasClientToken = new URLSearchParams(window.location.search).has("token");
 const clientToken = new URLSearchParams(window.location.search).get("token");
 const clientMode = Boolean(clientToken);
 
@@ -25,29 +25,21 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ⏳ Loading
   if (loading) {
-    return (
-      <div style={{ color: "white", padding: 40 }}>
-        Cargando aplicación…
-      </div>
-    );
+    return <div style={{ color: "white", padding: 40 }}>Cargando…</div>;
   }
 
-  // 👤 CLIENT MODE (SIN LOGIN)
+  // 👉 CLIENT MODE (más adelante)
   if (clientMode) {
     return <Dashboard clientMode token={clientToken} />;
   }
 
-  // 🔐 INTERNAL MODE (requiere login)
+  // 👉 SIN SESIÓN → LOGIN
   if (!session) {
-    return (
-      <div style={{ color: "white", padding: 40 }}>
-        No hay sesión activa
-      </div>
-    );
+    return <Login />;
   }
 
+  // 👉 CON SESIÓN → DASHBOARD INTERNO
   return <Dashboard />;
 }
 
