@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase as sb } from "./supabaseClient";
 import { getSupabasePublic } from "./supabaseClientPublic";
-import NotesImporter from "./NotesImporter"; // opcional: sólo si lo estás usando
+import NotesImporter from "./NotesImporter";
 import "./index.css";
 
 /* =============================================================
@@ -27,8 +27,10 @@ const PHASE_MARKERS = [
 ============================================================= */
 
 function Dashboard({ clientMode = false, token = null }) {
-  // ...
-  // Usar getSupabasePublic() en tiempo de ejecución para crear el cliente sólo si es necesario
+  console.log("🚀 Dashboard render", { clientMode, token });
+
+  // db será público si estamos en modo cliente (usa getSupabasePublic),
+  // o el cliente normal (service) si estamos en modo interno.
   const db = clientMode ? getSupabasePublic() : sb;
 
   /* =============================================================
@@ -66,8 +68,14 @@ function Dashboard({ clientMode = false, token = null }) {
   const [savingSession, setSavingSession] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // state to show/hide the NotesImporter
+  // Notes importer visibility
   const [showImporter, setShowImporter] = useState(false);
+
+  // Authenticated user (internal mode)
+  const [authUser, setAuthUser] = useState(null);
+
+  // evitar doble carga cuando usamos RPC en modo cliente
+  const [clientLoaded, setClientLoaded] = useState(false);
 
   /* =============================================================
      DERIVADOS (MEMO)
@@ -86,21 +94,25 @@ function Dashboard({ clientMode = false, token = null }) {
   ============================================================= */
 
   const loadProjects = useCallback(async () => {
-    const { data, error } = await sb
-      .from("projects")
-      .select("id, name, client_name")
-      .order("name");
+    try {
+      const { data, error } = await sb
+        .from("projects")
+        .select("id, name, client_name")
+        .order("name");
 
-    if (error) {
-      console.error("Error cargando proyectos:", error);
-      return;
-    }
+      if (error) {
+        console.error("Error cargando proyectos:", error);
+        return;
+      }
 
-    setProjects(data || []);
+      setProjects(data || []);
 
-    if (data?.length && !selectedProject) {
-      setSelectedProject(data[0].name);
-      setSelectedProjectId(data[0].id);
+      if (data?.length && !selectedProject) {
+        setSelectedProject(data[0].name);
+        setSelectedProjectId(data[0].id);
+      }
+    } catch (err) {
+      console.error("Error loadProjects:", err);
     }
   }, [selectedProject]);
 
@@ -111,20 +123,26 @@ function Dashboard({ clientMode = false, token = null }) {
       setSessionsLoading(true);
       setSessionsError(null);
 
-      const { data, error } = await db
-        .from("sessions")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("date", { ascending: false });
+      try {
+        const { data, error } = await db
+          .from("sessions")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("date", { ascending: false });
 
-      if (error) {
+        if (error) {
+          console.error("Error cargando sesiones:", error);
+          setSessionsError("Error cargando sesiones");
+        } else {
+          setSessions(data || []);
+          setActiveSessionId(data?.[0]?.id || null);
+        }
+      } catch (err) {
+        console.error("loadSessions err:", err);
         setSessionsError("Error cargando sesiones");
-      } else {
-        setSessions(data || []);
-        setActiveSessionId(data?.[0]?.id || null);
+      } finally {
+        setSessionsLoading(false);
       }
-
-      setSessionsLoading(false);
     },
     [db]
   );
@@ -134,17 +152,31 @@ function Dashboard({ clientMode = false, token = null }) {
       if (!projectName) return;
 
       setPhaseLoading(true);
+      setPhaseError(null);
 
-      const { data } = await db
-        .from("project_phase")
-        .select("current_phase")
-        .eq("project_name", projectName)
-        .maybeSingle();
+      try {
+        const { data, error } = await db
+          .from("project_phase")
+          .select("current_phase")
+          .eq("project_name", projectName)
+          .maybeSingle();
 
-      const phase = data?.current_phase ?? 1;
-      setProjectPhase(phase);
-      setManualPhase(phase);
-      setPhaseLoading(false);
+        if (error) {
+          console.error("Error loadPhase:", error);
+          setPhaseError("Error cargando fase");
+          setProjectPhase(1);
+          setManualPhase(1);
+        } else {
+          const phase = data?.current_phase ?? 1;
+          setProjectPhase(phase);
+          setManualPhase(phase);
+        }
+      } catch (err) {
+        console.error("loadPhase catch:", err);
+        setPhaseError("Error cargando fase");
+      } finally {
+        setPhaseLoading(false);
+      }
     },
     [db]
   );
@@ -153,7 +185,7 @@ function Dashboard({ clientMode = false, token = null }) {
      EFECTOS
   ============================================================= */
 
-  // MODO INTERNO → cargar proyectos
+  // MODO INTERNO → cargar proyectos sólo si no es clientMode
   useEffect(() => {
     if (!clientMode) {
       loadProjects();
@@ -161,59 +193,77 @@ function Dashboard({ clientMode = false, token = null }) {
   }, [clientMode, loadProjects]);
 
   // Cargar sesiones + fase cuando hay proyecto
+  // Pero evitar si estamos en clientMode o si ya cargó vía RPC (clientLoaded)
   useEffect(() => {
+    if (clientMode || clientLoaded) return;
     if (selectedProjectId && selectedProject) {
       loadSessions(selectedProjectId);
       loadPhase(selectedProject);
     }
-  }, [selectedProjectId, selectedProject, loadSessions, loadPhase]);
+  }, [selectedProjectId, selectedProject, loadSessions, loadPhase, clientMode, clientLoaded]);
 
-  // MODO CLIENTE → validar token y cargar proyecto
+  // MODO CLIENTE → validar token y cargar proyecto con RPC
   useEffect(() => {
     if (!clientMode || !token) return;
 
     const loadClient = async () => {
       try {
         setClientLoading(true);
+        setClientError(null);
 
-        const { data, error } = await db
-          .from("client_tokens")
-          .select("project_name, client_name, expires_at")
-          .eq("token", token)
-          .eq("active", true)
-          .single();
+        // Llamada RPC segura
+        const { data, error } = await db.rpc("get_project_for_token", { p_token: token });
 
-        if (!data || error) {
+        console.log("DEBUG RPC response:", { data, error });
+
+        if (error || !data) {
+          console.error("RPC error / no data:", error, data);
           setClientError("El enlace no es válido o expiró.");
           setClientLoading(false);
           return;
         }
 
-        if (data.expires_at) {
-          const expiresAt = new Date(data.expires_at);
-          if (expiresAt < new Date()) {
-            setClientError("Este enlace ha expirado.");
-            setClientLoading(false);
-            return;
+        // data: { project: { id, name, client_name }, sessions: [...], phase: { current_phase } }
+        const project = data.project || null;
+        const rpcSessions = Array.isArray(data.sessions) ? data.sessions : [];
+        const phase = data.phase?.current_phase ?? 1;
+
+        if (!project || !project.name) {
+          setClientError("El enlace no es válido o expiró.");
+          setClientLoading(false);
+          return;
+        }
+
+        setClientInfo({ client_name: project.client_name || "" });
+        setSelectedProject(project.name);
+
+        if (project.id) {
+          setSelectedProjectId(project.id);
+        } else {
+          // intentar resolver id por nombre (fallback)
+          try {
+            const { data: proj, error: projErr } = await db.from("projects").select("id").eq("name", project.name).single();
+            if (proj) setSelectedProjectId(proj.id);
+            if (projErr) console.warn("No se pudo resolver id del proyecto:", projErr);
+          } catch (err) {
+            console.warn("Error resolviendo id:", err);
           }
         }
 
-        setClientInfo({ client_name: data.client_name });
-        setSelectedProject(data.project_name);
+        // Normalizar sesiones (si es necesario) y setear estado
+        setSessions(
+          rpcSessions.map((s) => ({
+            ...s,
+            date: s.date ? s.date : null,
+          }))
+        );
 
-        const { data: project } = await db
-          .from("projects")
-          .select("id")
-          .eq("name", data.project_name)
-          .single();
-
-        if (project) {
-          setSelectedProjectId(project.id);
-        }
-
+        setProjectPhase(phase);
+        setManualPhase(phase);
+        setClientLoaded(true);
         setClientLoading(false);
       } catch (err) {
-        console.error("Error cliente:", err);
+        console.error("Error cliente (RPC):", err);
         setClientError("Error validando acceso.");
         setClientLoading(false);
       }
@@ -221,6 +271,67 @@ function Dashboard({ clientMode = false, token = null }) {
 
     loadClient();
   }, [clientMode, token, db]);
+
+  // AUTH: obtener usuario y suscribirse a cambios (solo en modo interno)
+useEffect(() => {
+  if (clientMode) return; // solo en modo interno nos interesa el authUser
+
+  let sub = null;
+  const initAuth = async () => {
+    try {
+      // Intento normal de obtener usuario desde supabase client
+      const {
+        data: { user },
+      } = await sb.auth.getUser();
+      if (user) {
+        setAuthUser(user);
+        return;
+      }
+
+      // Si no hay currentSession (user == null), intento fallback leyendo localStorage
+      const prefix = `sb-${process.env.REACT_APP_SUPABASE_PROJECT_REF || window.location.hostname.split('.')[0]}-auth-token`;
+      // En tu caso el key tiene el ref eqvrhhcgowywzrlrvyof; si lo quieres genérico:
+      const keys = Object.keys(localStorage).filter((k) => k.startsWith('sb-') && k.endsWith('-auth-token'));
+      const key = keys[0];
+      if (key) {
+        try {
+          const tokenObj = JSON.parse(localStorage.getItem(key));
+          const fallbackUser = tokenObj?.currentSession?.user || tokenObj?.user || null;
+          if (fallbackUser) {
+            setAuthUser(fallbackUser);
+            // Para debugging temporal (podés quitar luego)
+            window.__AUTH_USER = fallbackUser;
+            console.log('AUTH fallback: set authUser from localStorage for key', key);
+            return;
+          }
+        } catch (err) {
+          console.warn('AUTH fallback parse error', err);
+        }
+      }
+
+      // Si sigue sin user, dejamos authUser null (no logged in)
+      setAuthUser(null);
+    } catch (err) {
+      console.warn('Error al obtener usuario supabase:', err);
+      setAuthUser(null);
+    }
+
+    // Suscripción normal a auth changes (si ya la tienes, mantenela)
+    const {
+      data: { subscription },
+    } = sb.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user || null);
+    });
+
+    sub = subscription;
+  };
+
+  initAuth();
+
+  return () => {
+    if (sub && sub.unsubscribe) sub.unsubscribe();
+  };
+}, [clientMode]);
 
   /* =============================================================
      HELPERS
@@ -247,15 +358,22 @@ function Dashboard({ clientMode = false, token = null }) {
   };
 
   const formatClientStatus = (s) =>
-    s === "realizado"
-      ? "Realizado"
-      : s === "postergado"
-      ? "Postergado"
-      : "No realizado";
+    s === "realizado" ? "Realizado" : s === "postergado" ? "Postergado" : "No realizado";
 
   /* =============================================================
      ACCIONES
   ============================================================= */
+
+  const handleLogout = async () => {
+    try {
+      await sb.auth.signOut();
+    } catch (err) {
+      console.error("Error cerrando sesión:", err);
+    } finally {
+      // recargar para forzar vista de login
+      window.location.href = "/"; // redirige a la raíz (o a login)
+    }
+  };
 
   const saveManualPhase = async () => {
     if (!manualPhase || !selectedProject) return;
@@ -338,55 +456,83 @@ function Dashboard({ clientMode = false, token = null }) {
   };
 
   const handleSharePublicView = async () => {
-  if (!selectedProject) return;
+    if (!selectedProject) return;
 
-  try {
-    // Generar token único
-    const newToken = crypto?.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
-    const project = projects.find((p) => p.name === selectedProject);
-
-    // Fecha de expiración opcional: 7 días desde hoy
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 7);
-
-    // Inserta el token en la tabla client_tokens (usa el cliente interno sb)
-    const { error } = await sb.from("client_tokens").insert([
-      {
-        token: newToken,
-        project_name: selectedProject,
-        client_name: project?.client_name || "",
-        active: true,
-        expires_at: expires.toISOString(),
-      },
-    ]);
-
-    if (error) {
-      console.error("Error creando token público:", error);
-      alert("No se pudo generar el enlace público.");
-      return;
-    }
-
-    // Construir URL simple usando el mismo origen y query param ?token=
-    const url = `${window.location.origin}/?token=${newToken}`;
-
-    // Copiar al portapapeles y notificar
     try {
-      await navigator.clipboard.writeText(url);
-      alert("Link copiado:\n" + url);
+      const newToken = crypto?.randomUUID ? crypto.randomUUID() : (Math.random().toString(36).slice(2) + Date.now().toString(36));
+      const project = projects.find((p) => p.name === selectedProject);
+
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 7);
+
+      const { error } = await sb.from("client_tokens").insert([
+        {
+          token: newToken,
+          project_name: selectedProject,
+          client_name: project?.client_name || "",
+          active: true,
+          expires_at: expires.toISOString(),
+        },
+      ]);
+
+      if (error) {
+        console.error("Error creando token público:", error);
+        alert("No se pudo generar el enlace público.");
+        return;
+      }
+
+      const url = `${window.location.origin}/?token=${newToken}`;
+
+      try {
+        await navigator.clipboard.writeText(url);
+        alert("Link copiado:\n" + url);
+      } catch (err) {
+        console.warn("No se pudo copiar al portapapeles:", err);
+        prompt("Copia este enlace:", url);
+      }
     } catch (err) {
-      // Si falla el clipboard, mostrar la URL para copiar manualmente
-      console.warn("No se pudo copiar al portapapeles:", err);
-      prompt("Copia este enlace:", url);
+      console.error("Error generando link público:", err);
+      alert("Ocurrió un error generando el enlace público.");
     }
-  } catch (err) {
-    console.error("Error generando link público:", err);
-    alert("Ocurrió un error generando el enlace público.");
-  }
-};
+  };
+
+  const handleProjectChange = (name) => {
+    const p = projects.find((x) => x.name === name);
+    if (p) {
+      setSelectedProject(p.name);
+      setSelectedProjectId(p.id);
+    }
+  };
 
   /* =============================================================
      RENDER
   ============================================================= */
+
+  // small helpers for avatar / initials
+  const avatarUrl =
+    authUser?.user_metadata?.avatar_url ||
+    authUser?.user_metadata?.picture ||
+    authUser?.user_metadata?.picture_url ||
+    null;
+
+  const initials = (() => {
+    const email = authUser?.email || "";
+    if (!email) return "";
+    const namePart = email.split("@")[0];
+    const parts = namePart.split(/[\.\-_]/).filter(Boolean);
+    const letters = parts.length ? parts.map((p) => p[0]).slice(0, 2).join("") : namePart.slice(0, 2);
+    return letters.toUpperCase();
+  })();
+
+  // Debugging state (temporal)
+  useEffect(() => {
+    if (clientMode) {
+      console.log("DEBUG client view:", { clientInfo, clientLoading, clientError, selectedProject, projectPhase, sessionsLength: sessions.length });
+    } else {
+      console.log("DEBUG internal view:", { selectedProject, selectedProjectId, projectsCount: projects.length, projectPhase });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientMode, clientInfo, clientLoading, clientError, selectedProject, projectPhase, sessions.length]);
 
   // If importer is open, show it as a full-screen view
   if (showImporter) {
@@ -401,10 +547,7 @@ function Dashboard({ clientMode = false, token = null }) {
             </div>
           </div>
           <div className="topbar-right">
-            <button
-              className="primary-button"
-              onClick={() => setShowImporter(false)}
-            >
+            <button className="primary-button" onClick={() => setShowImporter(false)}>
               ← Volver
             </button>
           </div>
@@ -425,20 +568,14 @@ function Dashboard({ clientMode = false, token = null }) {
           <div className="topbar-logo">S</div>
           <div className="topbar-text">
             <span className="topbar-overline">SELLER CONSULTING</span>
-            <span className="topbar-title">
-              {clientMode ? "Bitácora del proyecto" : "Bitácora de proyectos"}
-            </span>
+            <span className="topbar-title">{clientMode ? "Bitácora del proyecto" : "Bitácora de proyectos"}</span>
           </div>
         </div>
 
         <div className="topbar-right">
           {!clientMode && (
             <>
-              <select
-                className="project-select"
-                value={selectedProject || ""}
-                onChange={(e) => handleProjectChange(e.target.value)}
-              >
+              <select className="project-select" value={selectedProject || ""} onChange={(e) => handleProjectChange(e.target.value)}>
                 {projects.map((p) => (
                   <option key={p.id} value={p.name}>
                     {p.name}
@@ -451,11 +588,7 @@ function Dashboard({ clientMode = false, token = null }) {
               </button>
 
               {/* IMPORT BUTTON */}
-              <button
-                className="import-button"
-                onClick={() => setShowImporter(true)}
-                title="Importar notas desde PDFs"
-              >
+              <button className="import-button" onClick={() => setShowImporter(true)} title="Importar notas desde PDFs">
                 Importar notas
               </button>
             </>
@@ -464,6 +597,36 @@ function Dashboard({ clientMode = false, token = null }) {
           {clientMode && clientInfo && (
             <div className="client-chip">
               Cliente: <strong>{clientInfo.client_name}</strong>
+            </div>
+          )}
+
+          {/* Usuario y logout (solo en modo interno) */}
+          {!clientMode && authUser && (
+            <div className="user-area">
+              {/* Avatar (imagen o iniciales) */}
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={authUser.email || "Usuario"}
+                  className="user-avatar"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="user-avatar user-avatar--initials">{initials}</div>
+              )}
+
+              <div className="user-info">
+                <div className="user-label">Sesión</div>
+                <div className="user-email" title={authUser.email}>
+                  {authUser.email}
+                </div>
+              </div>
+
+              <button className="logout-button" onClick={handleLogout}>
+                Cerrar sesión
+              </button>
             </div>
           )}
         </div>
@@ -479,9 +642,7 @@ function Dashboard({ clientMode = false, token = null }) {
               <div className="card-header">
                 <div>
                   <div className="card-overline">NUEVA NOTA DE SESIÓN</div>
-                  <div className="card-subtitle">
-                    Acuerdos, próximos pasos y decisiones.
-                  </div>
+                  <div className="card-subtitle">Acuerdos, próximos pasos y decisiones.</div>
                 </div>
                 <span className="badge-interno">Interno Seller</span>
               </div>
@@ -489,67 +650,28 @@ function Dashboard({ clientMode = false, token = null }) {
               <div className="card-body">
                 {saveError && <div className="error-message">{saveError}</div>}
 
-                <input
-                  className="field-input"
-                  placeholder="Título"
-                  value={draft.title}
-                  onChange={(e) =>
-                    setDraft({ ...draft, title: e.target.value })
-                  }
-                />
+                <input className="field-input" placeholder="Título" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
 
                 <div className="field-row">
                   <div className="field-group">
                     <label htmlFor="session-date">Fecha</label>
-                    <input
-                      id="session-date"
-                      type="date"
-                      className="field-input"
-                      value={draft.date}
-                      onChange={(e) =>
-                        setDraft({ ...draft, date: e.target.value })
-                      }
-                    />
+                    <input id="session-date" type="date" className="field-input" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} />
                   </div>
                   <div className="field-group">
                     <label htmlFor="session-tag">Etiqueta</label>
-                    <input
-                      id="session-tag"
-                      className="field-input"
-                      value={draft.tag}
-                      onChange={(e) =>
-                        setDraft({ ...draft, tag: e.target.value })
-                      }
-                    />
+                    <input id="session-tag" className="field-input" value={draft.tag} onChange={(e) => setDraft({ ...draft, tag: e.target.value })} />
                   </div>
                 </div>
 
                 <div className="field-row">
                   <div className="field-group">
                     <label htmlFor="client-responsible">Responsable cliente</label>
-                    <input
-                      id="client-responsible"
-                      className="field-input"
-                      value={draft.clientResponsible}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          clientResponsible: e.target.value,
-                        })
-                      }
-                    />
+                    <input id="client-responsible" className="field-input" value={draft.clientResponsible} onChange={(e) => setDraft({ ...draft, clientResponsible: e.target.value })} />
                   </div>
 
                   <div className="field-group">
                     <label htmlFor="client-status">Estado cliente</label>
-                    <select
-                      id="client-status"
-                      className="field-input"
-                      value={draft.clientStatus}
-                      onChange={(e) =>
-                        setDraft({ ...draft, clientStatus: e.target.value })
-                      }
-                    >
+                    <select id="client-status" className="field-input" value={draft.clientStatus} onChange={(e) => setDraft({ ...draft, clientStatus: e.target.value })}>
                       <option value="realizado">Realizado</option>
                       <option value="postergado">Postergado</option>
                       <option value="no_realizado">No realizado</option>
@@ -557,21 +679,9 @@ function Dashboard({ clientMode = false, token = null }) {
                   </div>
                 </div>
 
-                <textarea
-                  className="field-textarea"
-                  rows={3}
-                  placeholder="Resumen..."
-                  value={draft.summary}
-                  onChange={(e) =>
-                    setDraft({ ...draft, summary: e.target.value })
-                  }
-                />
+                <textarea className="field-textarea" rows={3} placeholder="Resumen..." value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} />
 
-                <button
-                  className="primary-button"
-                  onClick={handleCreateSession}
-                  disabled={savingSession}
-                >
+                <button className="primary-button" onClick={handleCreateSession} disabled={savingSession}>
                   {savingSession ? "Guardando..." : "+ Guardar nota"}
                 </button>
               </div>
@@ -593,9 +703,7 @@ function Dashboard({ clientMode = false, token = null }) {
                   {projectSessions.map((s) => (
                     <div
                       key={s.id}
-                      className={`note-item ${
-                        s.id === activeSessionId ? "note-item--active" : ""
-                      }`}
+                      className={`note-item ${s.id === activeSessionId ? "note-item--active" : ""}`}
                       onClick={() => setActiveSessionId(s.id)}
                       role="button"
                       tabIndex={0}
@@ -615,9 +723,7 @@ function Dashboard({ clientMode = false, token = null }) {
 
                       <div className="note-tags">
                         <span className="tag">{s.tag}</span>
-                        <span className="tag tag--status">
-                          {formatClientStatus(s.client_status)}
-                        </span>
+                        <span className="tag tag--status">{formatClientStatus(s.client_status)}</span>
                       </div>
 
                       <div className="note-summary">{s.summary}</div>
@@ -628,8 +734,7 @@ function Dashboard({ clientMode = false, token = null }) {
 
               {activeSession && !sessionsLoading && (
                 <div className="notes-footer">
-                  Última sesión seleccionada:{" "}
-                  <strong>{activeSession.title}</strong>
+                  Última sesión seleccionada: <strong>{activeSession.title}</strong>
                 </div>
               )}
             </div>
@@ -642,27 +747,19 @@ function Dashboard({ clientMode = false, token = null }) {
           <div className="card card-project-summary">
             <div className="summary-header">
               <div>
-                <div className="card-overline">
-                  {clientMode ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}
-                </div>
+                <div className="card-overline">{clientMode ? "RESUMEN DEL PROYECTO" : "VISTA DEL PROYECTO"}</div>
 
-                <h1 className="project-title">
-                  Bitácora de {selectedProject || "..."}
-                </h1>
+                <h1 className="project-title">Bitácora de {selectedProject || "..."}</h1>
 
                 <p className="project-description">
-                  {clientMode
-                    ? "Aquí verás los principales hitos, acuerdos y avances del proyecto."
-                    : "Resumen ejecutivo del avance del proyecto para cliente."}
+                  {clientMode ? "Aquí verás los principales hitos, acuerdos y avances del proyecto." : "Resumen ejecutivo del avance del proyecto para cliente."}
                 </p>
               </div>
 
               <div className="summary-metrics">
                 <div className="metric-card">
                   <div className="metric-label">Última actualización</div>
-                  <div className="metric-value">
-                    {new Date().toLocaleDateString("es-PY")}
-                  </div>
+                  <div className="metric-value">{new Date().toLocaleDateString("es-PY")}</div>
                 </div>
 
                 <div className="metric-card metric-card--green">
@@ -680,16 +777,10 @@ function Dashboard({ clientMode = false, token = null }) {
                 <div className="card-overline">AVANCE DEL PROYECTO</div>
 
                 <h2 className="phase-title">
-                  Fase actual:{" "}
-                  <span>
-                    {PHASES.find((p) => p.id === projectPhase)?.label ||
-                      "Configurando..."}
-                  </span>
+                  Fase actual: <span>{PHASES.find((p) => p.id === projectPhase)?.label || "Configurando..."}</span>
                 </h2>
 
-                <p className="phase-subtitle">
-                  Visualizá en qué etapa se encuentra tu proyecto.
-                </p>
+                <p className="phase-subtitle">Visualizá en qué etapa se encuentra tu proyecto.</p>
               </div>
 
               <div className="phase-meta">
@@ -698,12 +789,8 @@ function Dashboard({ clientMode = false, token = null }) {
                     "Cargando..."
                   ) : (
                     <>
-                      <span className="phase-pill-number">
-                        {projectPhase ?? "-"}
-                      </span>
-                      <span className="phase-pill-text">
-                        de {PHASES.length} fases
-                      </span>
+                      <span className="phase-pill-number">{projectPhase ?? "-"}</span>
+                      <span className="phase-pill-text">de {PHASES.length} fases</span>
                     </>
                   )}
                 </div>
@@ -713,24 +800,15 @@ function Dashboard({ clientMode = false, token = null }) {
             {!clientMode && (
               <div className="manual-phase-control">
                 <h3 className="manual-phase-title">Control manual de fase</h3>
-                <p className="manual-phase-description">
-                  Seleccioná la fase actual del proyecto. Esto actualiza el
-                  roadmap del cliente.
-                </p>
+                <p className="manual-phase-description">Seleccioná la fase actual del proyecto. Esto actualiza el roadmap del cliente.</p>
 
-                {phaseError && (
-                  <div className="error-message" role="alert">
-                    {phaseError}
-                  </div>
-                )}
+                {phaseError && <div className="error-message" role="alert">{phaseError}</div>}
 
                 <div className="manual-phase-grid">
                   {PHASES.map((p) => (
                     <div
                       key={p.id}
-                      className={`manual-phase-card ${
-                        manualPhase === p.id ? "selected" : ""
-                      }`}
+                      className={`manual-phase-card ${manualPhase === p.id ? "selected" : ""}`}
                       onClick={() => setManualPhase(p.id)}
                       role="button"
                       tabIndex={0}
@@ -745,11 +823,7 @@ function Dashboard({ clientMode = false, token = null }) {
                   ))}
                 </div>
 
-                <button
-                  className="manual-phase-save"
-                  disabled={!manualPhase || savingPhase}
-                  onClick={saveManualPhase}
-                >
+                <button className="manual-phase-save" disabled={!manualPhase || savingPhase} onClick={saveManualPhase}>
                   {savingPhase ? "Guardando..." : "Guardar fase actual"}
                 </button>
               </div>
@@ -757,12 +831,7 @@ function Dashboard({ clientMode = false, token = null }) {
 
             {/* ROADMAP SVG */}
             <div className="phase-curve-wrapper">
-              <svg
-                viewBox="0 0 960 220"
-                className="phase-curve-svg"
-                role="img"
-                aria-label="Roadmap del proyecto con 4 fases"
-              >
+              <svg viewBox="0 0 960 220" className="phase-curve-svg" role="img" aria-label="Roadmap del proyecto con 4 fases">
                 <title>Progreso del proyecto a través de 4 fases</title>
                 <path
                   className="phase-curve-path"
@@ -784,35 +853,15 @@ function Dashboard({ clientMode = false, token = null }) {
                       role="img"
                       aria-label={`Fase ${marker.id}: ${phase.label} - ${getPhaseStatusLabel(status)}`}
                     >
-                      <circle
-                        cx={marker.x}
-                        cy={marker.y}
-                        r="20"
-                        className="phase-marker-ring"
-                      />
+                      <circle cx={marker.x} cy={marker.y} r="20" className="phase-marker-ring" />
 
-                      <circle
-                        cx={marker.x}
-                        cy={marker.y}
-                        r="9"
-                        className="phase-marker-dot"
-                      />
+                      <circle cx={marker.x} cy={marker.y} r="9" className="phase-marker-dot" />
 
-                      <text
-                        x={marker.x}
-                        y={marker.y + 4}
-                        textAnchor="middle"
-                        className="phase-marker-index"
-                      >
+                      <text x={marker.x} y={marker.y + 4} textAnchor="middle" className="phase-marker-index">
                         {marker.id}
                       </text>
 
-                      <text
-                        x={marker.x}
-                        y={marker.y - 26}
-                        textAnchor="middle"
-                        className="phase-marker-label"
-                      >
+                      <text x={marker.x} y={marker.y - 26} textAnchor="middle" className="phase-marker-label">
                         {phase.label}
                       </text>
                     </g>
@@ -826,21 +875,12 @@ function Dashboard({ clientMode = false, token = null }) {
               {PHASES.map((phase) => {
                 const status = getPhaseStatus(phase.id);
                 return (
-                  <div
-                    key={phase.id}
-                    className={`phase-legend-item phase-legend-item--${status}`}
-                  >
+                  <div key={phase.id} className={`phase-legend-item phase-legend-item--${status}`}>
                     <div className="phase-legend-pill">
-                      <span className="phase-legend-index">
-                        {phase.id.toString().padStart(2, "0")}
-                      </span>
-                      <span className="phase-legend-title">
-                        {phase.label}
-                      </span>
+                      <span className="phase-legend-index">{phase.id.toString().padStart(2, "0")}</span>
+                      <span className="phase-legend-title">{phase.label}</span>
                     </div>
-                    <span className="phase-legend-status">
-                      {getPhaseStatusLabel(status)}
-                    </span>
+                    <span className="phase-legend-status">{getPhaseStatusLabel(status)}</span>
                   </div>
                 );
               })}
@@ -849,11 +889,7 @@ function Dashboard({ clientMode = false, token = null }) {
 
           {/* TIMELINE */}
           <div className="card card-timeline">
-            {clientMode && clientLoading && (
-              <div className="timeline-empty">
-                Validando tu acceso como cliente...
-              </div>
-            )}
+            {clientMode && clientLoading && <div className="timeline-empty">Validando tu acceso como cliente...</div>}
 
             {clientMode && !clientLoading && clientError && (
               <div className="timeline-empty" role="alert">
@@ -861,8 +897,7 @@ function Dashboard({ clientMode = false, token = null }) {
                 <br />
                 <br />
                 <small>
-                  Si el problema persiste, escribinos a{" "}
-                  <strong>ml@seller.consulting</strong>.
+                  Si el problema persiste, escribinos a <strong>ml@seller.consulting</strong>.
                 </small>
               </div>
             )}
@@ -872,9 +907,7 @@ function Dashboard({ clientMode = false, token = null }) {
                 {sessionsLoading ? (
                   <div className="timeline-empty">Cargando bitácora...</div>
                 ) : projectSessions.length === 0 ? (
-                  <div className="timeline-empty">
-                    Todavía no hay eventos en la bitácora.
-                  </div>
+                  <div className="timeline-empty">Todavía no hay eventos en la bitácora.</div>
                 ) : (
                   <ol className="timeline">
                     {projectSessions.map((session, index) => (
@@ -893,35 +926,23 @@ function Dashboard({ clientMode = false, token = null }) {
                             </div>
 
                             <div className="timeline-badges">
-                              <span className="timeline-badge">
-                                Sesión #{projectSessions.length - index}
-                              </span>
-                              <span className="timeline-badge timeline-badge--blue">
-                                {session.tag}
-                              </span>
+                              <span className="timeline-badge">Sesión #{projectSessions.length - index}</span>
+                              <span className="timeline-badge timeline-badge--blue">{session.tag}</span>
                             </div>
                           </div>
 
                           <div className="timeline-card">
                             <div className="timeline-title">{session.title}</div>
 
-                            <div className="timeline-summary">
-                              {session.summary}
-                            </div>
+                            <div className="timeline-summary">{session.summary}</div>
 
                             <div className="timeline-meta">
                               <span>
-                                • Responsable cliente:{" "}
-                                <strong>
-                                  {session.client_responsible || "Sin asignar"}
-                                </strong>
+                                • Responsable cliente: <strong>{session.client_responsible || "Sin asignar"}</strong>
                               </span>
 
                               <span>
-                                • Estado cliente:{" "}
-                                <strong className="status-pill">
-                                  {formatClientStatus(session.client_status)}
-                                </strong>
+                                • Estado cliente: <strong className="status-pill">{formatClientStatus(session.client_status)}</strong>
                               </span>
                             </div>
                           </div>
