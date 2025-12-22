@@ -440,11 +440,10 @@ const handleSaveNextSession = async () => {
           <div className="topbar-left">
             {/* Logo */}
             <img
-              src="/src/assets/logo-seller.png"
+              src={logoSeller}
               alt="Seller Consulting"
               className="topbar-logo-img"
             />
-
             {/* Selector de proyecto */}
             <select
               className="project-selector"
