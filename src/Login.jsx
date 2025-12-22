@@ -1,28 +1,22 @@
-import { useState } from "react";
-import { GoogleLogin } from "@react-oauth/google";
 import { supabase } from "./supabaseClient";
 
 export default function Login() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleGoogleLogin = async (credentialResponse) => {
+  const handleGoogleLogin = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error } = await supabase.auth.signInWithIdToken({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        token: credentialResponse.credential,
+        options: {
+          redirectTo: window.location.origin,
+        },
       });
-
-      if (error) throw error;
-
+      
+      if (error) {
+        console.error('Error en login:', error);
+        alert('Error al iniciar sesión: ' + error.message);
+      }
     } catch (err) {
-      console.error("Error en login:", err);
-      setError("No pudimos iniciar sesión. Intentá de nuevo.");
-    } finally {
-      setLoading(false);
+      console.error('Error inesperado:', err);
+      alert('Error inesperado al iniciar sesión');
     }
   };
 
@@ -32,202 +26,71 @@ export default function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
-      padding: '20px'
+      background: '#0f172a',
     }}>
-      {/* Animated Background Effects */}
       <div style={{
-        position: 'fixed',
-        inset: 0,
-        overflow: 'hidden',
-        pointerEvents: 'none'
-      }}>
-        <div style={{
-          position: 'absolute',
-          width: '500px',
-          height: '500px',
-          top: '-10%',
-          left: '-5%',
-          background: 'radial-gradient(circle, rgba(56, 189, 248, 0.15), transparent 70%)',
-          borderRadius: '50%',
-          filter: 'blur(60px)'
-        }} />
-        <div style={{
-          position: 'absolute',
-          width: '400px',
-          height: '400px',
-          bottom: '-10%',
-          right: '-5%',
-          background: 'radial-gradient(circle, rgba(168, 85, 247, 0.15), transparent 70%)',
-          borderRadius: '50%',
-          filter: 'blur(60px)'
-        }} />
-      </div>
-
-      {/* Login Container */}
-      <div style={{
-        position: 'relative',
-        zIndex: 10,
+        background: '#1e293b',
+        padding: '48px',
+        borderRadius: '16px',
+        textAlign: 'center',
+        maxWidth: '400px',
         width: '100%',
-        maxWidth: '400px'
       }}>
-        {/* Logo */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          marginBottom: '24px'
+        <h1 style={{ 
+          color: 'white', 
+          marginBottom: '24px',
+          fontSize: '32px',
+          fontWeight: '700',
         }}>
-          <div style={{
-            width: '80px',
-            height: '80px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #38bdf8, #a78bfa)',
+          🔐 Seller Bitácora
+        </h1>
+        
+        <p style={{ 
+          color: '#94a3b8', 
+          marginBottom: '32px',
+          fontSize: '16px',
+        }}>
+          Inicia sesión para acceder al dashboard
+        </p>
+
+        <button
+          onClick={handleGoogleLogin}
+          style={{
+            width: '100%',
+            padding: '12px 24px',
+            background: 'white',
+            color: '#1e293b',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 10px 40px rgba(56, 189, 248, 0.3)'
-          }}>
-            <span style={{
-              color: 'white',
-              fontSize: '40px',
-              fontWeight: 'bold'
-            }}>S</span>
-          </div>
-        </div>
+            gap: '12px',
+            transition: 'all 0.2s',
+          }}
+          onMouseOver={(e) => e.target.style.transform = 'scale(1.02)'}
+          onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Continuar con Google
+        </button>
 
-        {/* Title */}
-        <h1 style={{
-          color: 'white',
-          fontSize: '36px',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          marginBottom: '32px'
+        <p style={{ 
+          color: '#64748b', 
+          marginTop: '24px',
+          fontSize: '14px',
         }}>
-          Welcome to Seller
-        </h1>
-
-        {/* Login Card */}
-        <div style={{
-          background: 'rgba(30, 41, 59, 0.8)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '16px',
-          padding: '32px',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)'
-        }}>
-          {error && (
-            <div style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              <p style={{ color: '#f87171', fontSize: '14px', margin: 0 }}>{error}</p>
-            </div>
-          )}
-
-          {loading ? (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              padding: '40px 0'
-            }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '3px solid rgba(100, 116, 139, 0.3)',
-                borderTop: '3px solid #38bdf8',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }} />
-              <p style={{ color: '#94a3b8', marginTop: '16px', fontSize: '14px' }}>
-                Iniciando sesión...
-              </p>
-            </div>
-          ) : (
-            <>
-              <GoogleLogin
-                onSuccess={handleGoogleLogin}
-                onError={() => setError("Error al iniciar sesión con Google")}
-                width="100%"
-                theme="filled_black"
-                size="large"
-                text="continue_with"
-              />
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                margin: '24px 0',
-                gap: '12px'
-              }}>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
-                <span style={{ color: '#64748b', fontSize: '14px' }}>o</span>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }} />
-              </div>
-
-              <button disabled style={{
-                width: '100%',
-                padding: '12px',
-                background: 'rgba(30, 41, 59, 0.5)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                color: '#64748b',
-                fontSize: '14px',
-                cursor: 'not-allowed',
-                opacity: 0.6
-              }}>
-                Email (Próximamente)
-              </button>
-
-              <p style={{
-                color: '#94a3b8',
-                fontSize: '14px',
-                textAlign: 'center',
-                marginTop: '20px'
-              }}>
-                ¿No tenés cuenta?{' '}
-                <span style={{ color: '#38bdf8', fontWeight: '600', cursor: 'pointer' }}>
-                  Solicitar acceso
-                </span>
-              </p>
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{
-          marginTop: '32px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '16px',
-            fontSize: '12px',
-            color: '#64748b',
-            marginBottom: '12px'
-          }}>
-            <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Términos</a>
-            <span>·</span>
-            <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Privacidad</a>
-            <span>·</span>
-            <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Ayuda</a>
-          </div>
-          <p style={{ color: '#475569', fontSize: '12px', margin: 0 }}>
-            © 2025 Seller Consulting
-          </p>
-        </div>
+          Solo usuarios autorizados
+        </p>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }
