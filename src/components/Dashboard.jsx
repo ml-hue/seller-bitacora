@@ -204,10 +204,12 @@ function Dashboard({ clientMode = false, token = null }) {
           });
         }
         setClientLoaded(true);
+        setSessionsLoading(false);
         setClientLoading(false);
       } catch (err) {
         console.error("Error cliente (RPC):", err);
         setClientError("Error validando acceso.");
+        setSessionsLoading(false);
         setClientLoading(false);
       }
     };
