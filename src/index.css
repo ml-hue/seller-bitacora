@@ -1982,4 +1982,15 @@ body::before {
   color: #94a3b8;
   margin-bottom: 6px;
   font-weight: 500;
+  
+}
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Si tenés un main o content wrapper */
+main {
+  flex: 1;
 }
