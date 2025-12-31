@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import logoSeller from "../assets/logo-seller.png";
 import { supabase as sb } from "../supabaseClient";
+import { getSupabasePublic } from "../supabaseClientPublic";
 import NotesImporter from "../NotesImporter";
 import "../index.css";
 
