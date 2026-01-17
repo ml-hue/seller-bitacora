@@ -1994,3 +1994,51 @@ body::before {
 main {
   flex: 1;
 }
+
+/* ========== DASHBOARD TABS ========== */
+.dashboard-tabs {
+  display: flex;
+  gap: 8px;
+  margin-right: 16px;
+}
+
+.dashboard-tab {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.dashboard-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dashboard-tab.active {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.5);
+  color: #00e5ff;
+}
+
+.dashboard-tab.active:hover {
+  background: rgba(0, 229, 255, 0.15);
+}
+
+@media (max-width: 768px) {
+  .dashboard-tabs {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .dashboard-tab {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+}
