@@ -1,23 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, TrendingDown, AlertCircle, Plus, DollarSign, Check, Clock, Filter } from 'lucide-react';
-import { useFinanzas } from '../hooks/useFinanzas';
+import { useFinanzas } from '@/hooks/useFinanzas';
 
 const BitacoraFinanzas = () => {
-  // Force dark mode styles
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      body, html {
-        background-color: #0a1628 !important;
-        color: white !important;
-      }
-      * {
-        color-scheme: dark;
-      }
-    `;
-    document.head.appendChild(style);
-    return () => document.head.removeChild(style);
-  }, []);
+  // No need to force global styles - inherit from parent Dashboard
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showMovimientoForm, setShowMovimientoForm] = useState(false);
@@ -127,7 +113,7 @@ const BitacoraFinanzas = () => {
   // Si no hay configuración, mostrar setup inicial
   if (!loading && !config) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center" style={{ minHeight: '100vh', backgroundColor: '#0a1628' }}>
+      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center">
         <div className="bg-[#1a2942] rounded-lg shadow-xl max-w-md w-full p-8 border border-gray-700">
           <h2 className="text-2xl font-bold text-white mb-6">Configuración Inicial</h2>
           <p className="text-gray-400 mb-6">Antes de empezar, configura tu cuenta bancaria:</p>
@@ -180,7 +166,7 @@ const BitacoraFinanzas = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center" style={{ minHeight: '100vh', backgroundColor: '#0a1628' }}>
+      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center">
         <div className="text-white text-xl">Cargando...</div>
       </div>
     );
@@ -194,12 +180,12 @@ const BitacoraFinanzas = () => {
   const alertasSaldo = proyecciones.filter(p => p.saldoProyectado < 10000000);
 
   return (
-    <div className="min-h-screen bg-[#0a1628] p-6" style={{ minHeight: '100vh', backgroundColor: '#0a1628' }}>
+    <div className="min-h-screen bg-[#0a1628] p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2" style={{ color: 'white' }}>Módulo de Finanzas</h1>
-          <p className="text-gray-400" style={{ color: '#9ca3af' }}>Control de Cashflow - {config?.cuenta_bancaria}</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Módulo de Finanzas</h1>
+          <p className="text-gray-400">Control de Cashflow - {config?.cuenta_bancaria}</p>
         </div>
 
         {/* Tabs */}
