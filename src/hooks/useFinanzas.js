@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase' // Ajusta esta ruta según tu proyecto
+import { supabase } from '../supabaseClient'
 
 export const useFinanzas = () => {
   const [config, setConfig] = useState(null)
