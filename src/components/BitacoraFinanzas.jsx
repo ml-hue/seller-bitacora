@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, TrendingUp, TrendingDown, AlertCircle, Plus, DollarSign, Check, Clock, Filter } from 'lucide-react';
-import { useFinanzas } from '@/hooks/useFinanzas';
+import { useFinanzas } from '../hooks/useFinanzas';
 
 const BitacoraFinanzas = () => {
   // No need to force global styles - inherit from parent Dashboard
