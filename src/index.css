@@ -2000,6 +2000,7 @@ main {
   display: flex;
   gap: 8px;
   margin-right: 16px;
+  align-items: center;
 }
 
 .dashboard-tab {
@@ -2013,6 +2014,7 @@ main {
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dashboard-tab:hover {
@@ -2033,7 +2035,6 @@ main {
 
 @media (max-width: 768px) {
   .dashboard-tabs {
-    flex-direction: column;
     gap: 4px;
   }
   
