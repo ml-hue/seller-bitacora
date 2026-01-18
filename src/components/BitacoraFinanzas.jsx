@@ -113,7 +113,7 @@ const BitacoraFinanzas = () => {
   // Si no hay configuración, mostrar setup inicial
   if (!loading && !config) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center">
+      <div className="p-6 flex items-center justify-center">
         <div className="bg-[#1a2942] rounded-lg shadow-xl max-w-md w-full p-8 border border-gray-700">
           <h2 className="text-2xl font-bold text-white mb-6">Configuración Inicial</h2>
           <p className="text-gray-400 mb-6">Antes de empezar, configura tu cuenta bancaria:</p>
@@ -166,8 +166,10 @@ const BitacoraFinanzas = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a1628] p-6 flex items-center justify-center">
-        <div className="text-white text-xl">Cargando...</div>
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-white text-xl">Cargando...</div>
+        </div>
       </div>
     );
   }
@@ -180,7 +182,7 @@ const BitacoraFinanzas = () => {
   const alertasSaldo = proyecciones.filter(p => p.saldoProyectado < 10000000);
 
   return (
-    <div className="min-h-screen bg-[#0a1628] p-6">
+    <div className="p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
