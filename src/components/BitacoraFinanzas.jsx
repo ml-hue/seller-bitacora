@@ -827,8 +827,8 @@ const BitacoraFinanzas = () => {
           </div>
         )}
         </div>
-      </div> 
-    </div> 
+      </div>
+    </div>
   );
 };
 
