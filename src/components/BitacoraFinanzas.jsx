@@ -826,7 +826,9 @@ const BitacoraFinanzas = () => {
             </div>
           </div>
         )}
-      </div>
+        </div> {/* Cierre max-w-7xl mx-auto */}
+      </div> {/* Cierre p-6 */}
+    </div> {/* Cierre finanzas-module */}
   );
 };
 
