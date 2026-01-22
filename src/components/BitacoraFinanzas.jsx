@@ -182,8 +182,9 @@ const BitacoraFinanzas = () => {
   const alertasSaldo = proyecciones.filter(p => p.saldoProyectado < 10000000);
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="finanzas-module">
+       <div className="p-6">
+         <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Módulo de Finanzas</h1>
@@ -804,6 +805,7 @@ const BitacoraFinanzas = () => {
                   </div>
                 )}
               </div>
+            </div> 
 
               {/* Botones */}
               <div className="flex gap-3 mt-6">

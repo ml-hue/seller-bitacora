@@ -2096,523 +2096,523 @@ main {
 }
 
 /* ========================================================================
-   MÓDULO DE FINANZAS - CSS COMPLETO
-   Pegar al final de src/index.css
+   MÓDULO DE FINANZAS - CSS ENCAPSULADO
+   Reemplazar el bloque anterior en src/index.css
    ======================================================================== */
 
 /* ==================== LAYOUT BASE ==================== */
 
-.p-6 {
+.finanzas-module .p-6 {
   padding: 1.5rem;
 }
 
-.mb-8 {
+.finanzas-module .mb-8 {
   margin-bottom: 2rem;
 }
 
-.mb-6 {
+.finanzas-module .mb-6 {
   margin-bottom: 1.5rem;
 }
 
-.mb-4 {
+.finanzas-module .mb-4 {
   margin-bottom: 1rem;
 }
 
-.mb-2 {
+.finanzas-module .mb-2 {
   margin-bottom: 0.5rem;
 }
 
-.mb-1 {
+.finanzas-module .mb-1 {
   margin-bottom: 0.25rem;
 }
 
-.mt-6 {
+.finanzas-module .mt-6 {
   margin-top: 1.5rem;
 }
 
-.max-w-7xl {
+.finanzas-module .max-w-7xl {
   max-width: 80rem;
 }
 
-.mx-auto {
+.finanzas-module .mx-auto {
   margin-left: auto;
   margin-right: auto;
 }
 
 /* ==================== TIPOGRAFÍA ==================== */
 
-.text-3xl {
+.finanzas-module .text-3xl {
   font-size: 1.875rem;
   line-height: 2.25rem;
 }
 
-.text-2xl {
+.finanzas-module .text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
 }
 
-.text-xl {
+.finanzas-module .text-xl {
   font-size: 1.25rem;
   line-height: 1.75rem;
 }
 
-.text-lg {
+.finanzas-module .text-lg {
   font-size: 1.125rem;
   line-height: 1.75rem;
 }
 
-.text-sm {
+.finanzas-module .text-sm {
   font-size: 0.875rem;
   line-height: 1.25rem;
 }
 
-.text-xs {
+.finanzas-module .text-xs {
   font-size: 0.75rem;
   line-height: 1rem;
 }
 
-.font-bold {
+.finanzas-module .font-bold {
   font-weight: 700;
 }
 
-.font-semibold {
+.finanzas-module .font-semibold {
   font-weight: 600;
 }
 
-.font-medium {
+.finanzas-module .font-medium {
   font-weight: 500;
 }
 
 /* ==================== COLORES DE TEXTO ==================== */
 
-.text-white {
+.finanzas-module .text-white {
   color: #ffffff;
 }
 
-.text-gray-400 {
+.finanzas-module .text-gray-400 {
   color: #9ca3af;
 }
 
-.text-gray-500 {
+.finanzas-module .text-gray-500 {
   color: #6b7280;
 }
 
-.text-gray-300 {
+.finanzas-module .text-gray-300 {
   color: #d1d5db;
 }
 
-.text-cyan-400 {
+.finanzas-module .text-cyan-400 {
   color: #22d3ee;
 }
 
-.text-green-400 {
+.finanzas-module .text-green-400 {
   color: #4ade80;
 }
 
-.text-red-400 {
+.finanzas-module .text-red-400 {
   color: #f87171;
 }
 
-.text-orange-400 {
+.finanzas-module .text-orange-400 {
   color: #fb923c;
 }
 
-.text-blue-400 {
+.finanzas-module .text-blue-400 {
   color: #60a5fa;
 }
 
-.text-red-300 {
+.finanzas-module .text-red-300 {
   color: #fca5a5;
 }
 
-.text-red-200 {
+.finanzas-module .text-red-200 {
   color: #fecaca;
 }
 
 /* ==================== BACKGROUNDS ==================== */
 
-.bg-\[\#1a2942\] {
+.finanzas-module .bg-\[\#1a2942\] {
   background-color: #1a2942;
 }
 
-.bg-\[\#0f1a2e\] {
+.finanzas-module .bg-\[\#0f1a2e\] {
   background-color: #0f1a2e;
 }
 
-.bg-cyan-500 {
+.finanzas-module .bg-cyan-500 {
   background-color: #06b6d4;
 }
 
-.bg-transparent {
+.finanzas-module .bg-transparent {
   background-color: transparent;
 }
 
 /* Backgrounds con opacidad */
-.bg-red-900\/20 {
+.finanzas-module .bg-red-900\/20 {
   background-color: rgba(127, 29, 29, 0.2);
 }
 
-.bg-cyan-900\/30 {
+.finanzas-module .bg-cyan-900\/30 {
   background-color: rgba(22, 78, 99, 0.3);
 }
 
-.bg-orange-900\/20 {
+.finanzas-module .bg-orange-900\/20 {
   background-color: rgba(124, 45, 18, 0.2);
 }
 
-.bg-blue-900\/20 {
+.finanzas-module .bg-blue-900\/20 {
   background-color: rgba(30, 58, 138, 0.2);
 }
 
-.bg-orange-500\/20 {
+.finanzas-module .bg-orange-500\/20 {
   background-color: rgba(249, 115, 22, 0.2);
 }
 
-.bg-blue-500\/20 {
+.finanzas-module .bg-blue-500\/20 {
   background-color: rgba(59, 130, 246, 0.2);
 }
 
 /* ==================== BORDERS ==================== */
 
-.border {
+.finanzas-module .border {
   border-width: 1px;
 }
 
-.border-b {
+.finanzas-module .border-b {
   border-bottom-width: 1px;
 }
 
-.border-b-2 {
+.finanzas-module .border-b-2 {
   border-bottom-width: 2px;
 }
 
-.border-gray-700 {
+.finanzas-module .border-gray-700 {
   border-color: #374151;
 }
 
-.border-gray-800 {
+.finanzas-module .border-gray-800 {
   border-color: #1f2937;
 }
 
-.border-gray-600 {
+.finanzas-module .border-gray-600 {
   border-color: #4b5563;
 }
 
-.border-cyan-400 {
+.finanzas-module .border-cyan-400 {
   border-color: #22d3ee;
 }
 
-.border-red-800\/50 {
+.finanzas-module .border-red-800\/50 {
   border-color: rgba(153, 27, 27, 0.5);
 }
 
-.border-cyan-800\/50 {
+.finanzas-module .border-cyan-800\/50 {
   border-color: rgba(21, 94, 117, 0.5);
 }
 
-.border-orange-800\/50 {
+.finanzas-module .border-orange-800\/50 {
   border-color: rgba(154, 52, 18, 0.5);
 }
 
-.border-blue-800\/50 {
+.finanzas-module .border-blue-800\/50 {
   border-color: rgba(30, 64, 175, 0.5);
 }
 
 /* ==================== ROUNDED ==================== */
 
-.rounded-lg {
+.finanzas-module .rounded-lg {
   border-radius: 0.5rem;
 }
 
-.rounded {
+.finanzas-module .rounded {
   border-radius: 0.25rem;
 }
 
-.rounded-full {
+.finanzas-module .rounded-full {
   border-radius: 9999px;
 }
 
 /* ==================== SHADOWS ==================== */
 
-.shadow-lg {
+.finanzas-module .shadow-lg {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-.shadow-xl {
+.finanzas-module .shadow-xl {
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 /* ==================== FLEXBOX ==================== */
 
-.flex {
+.finanzas-module .flex {
   display: flex;
 }
 
-.items-center {
+.finanzas-module .items-center {
   align-items: center;
 }
 
-.items-start {
+.finanzas-module .items-start {
   align-items: flex-start;
 }
 
-.justify-between {
+.finanzas-module .justify-between {
   justify-content: space-between;
 }
 
-.gap-2 {
+.finanzas-module .gap-2 {
   gap: 0.5rem;
 }
 
-.gap-3 {
+.finanzas-module .gap-3 {
   gap: 0.75rem;
 }
 
-.gap-4 {
+.finanzas-module .gap-4 {
   gap: 1rem;
 }
 
-.gap-6 {
+.finanzas-module .gap-6 {
   gap: 1.5rem;
 }
 
-.flex-1 {
+.finanzas-module .flex-1 {
   flex: 1 1 0%;
 }
 
 /* ==================== GRID ==================== */
 
-.grid {
+.finanzas-module .grid {
   display: grid;
 }
 
-.grid-cols-1 {
+.finanzas-module .grid-cols-1 {
   grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
 @media (min-width: 768px) {
-  .md\:grid-cols-3 {
+  .finanzas-module .md\:grid-cols-3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 /* ==================== SPACING ==================== */
 
-.space-y-3 > * + * {
+.finanzas-module .space-y-3 > * + * {
   margin-top: 0.75rem;
 }
 
-.space-y-4 > * + * {
+.finanzas-module .space-y-4 > * + * {
   margin-top: 1rem;
 }
 
-.space-y-6 > * + * {
+.finanzas-module .space-y-6 > * + * {
   margin-top: 1.5rem;
 }
 
 /* ==================== POSITIONING ==================== */
 
-.relative {
+.finanzas-module .relative {
   position: relative;
 }
 
-.fixed {
+.finanzas-module .fixed {
   position: fixed;
 }
 
-.bottom-8 {
+.finanzas-module .bottom-8 {
   bottom: 2rem;
 }
 
-.right-8 {
+.finanzas-module .right-8 {
   right: 2rem;
 }
 
 /* ==================== SIZING ==================== */
 
-.w-5 {
+.finanzas-module .w-5 {
   width: 1.25rem;
 }
 
-.h-5 {
+.finanzas-module .h-5 {
   height: 1.25rem;
 }
 
-.w-4 {
+.finanzas-module .w-4 {
   width: 1rem;
 }
 
-.h-4 {
+.finanzas-module .h-4 {
   height: 1rem;
 }
 
-.w-3 {
+.finanzas-module .w-3 {
   width: 0.75rem;
 }
 
-.h-3 {
+.finanzas-module .h-3 {
   height: 0.75rem;
 }
 
-.w-10 {
+.finanzas-module .w-10 {
   width: 2.5rem;
 }
 
-.h-10 {
+.finanzas-module .h-10 {
   height: 2.5rem;
 }
 
-.w-24 {
+.finanzas-module .w-24 {
   width: 6rem;
 }
 
-.w-full {
+.finanzas-module .w-full {
   width: 100%;
 }
 
-.max-w-md {
+.finanzas-module .max-w-md {
   max-width: 28rem;
 }
 
 /* ==================== BUTTONS & INTERACTIONS ==================== */
 
-.cursor-pointer {
+.finanzas-module .cursor-pointer {
   cursor: pointer;
 }
 
-.transition-colors {
+.finanzas-module .transition-colors {
   transition-property: color, background-color, border-color;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
 }
 
-.hover\:bg-cyan-400:hover {
+.finanzas-module .hover\:bg-cyan-400:hover {
   background-color: #22d3ee;
 }
 
-.hover\:text-gray-200:hover {
+.finanzas-module .hover\:text-gray-200:hover {
   color: #e5e7eb;
 }
 
-.focus\:ring-2:focus {
+.finanzas-module .focus\:ring-2:focus {
   box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.5);
 }
 
-.focus\:border-cyan-400:focus {
+.finanzas-module .focus\:border-cyan-400:focus {
   border-color: #22d3ee;
 }
 
-.focus\:border-transparent:focus {
+.finanzas-module .focus\:border-transparent:focus {
   border-color: transparent;
 }
 
-.disabled\:opacity-50:disabled {
+.finanzas-module .disabled\:opacity-50:disabled {
   opacity: 0.5;
 }
 
-.disabled\:cursor-not-allowed:disabled {
+.finanzas-module .disabled\:cursor-not-allowed:disabled {
   cursor: not-allowed;
 }
 
 /* ==================== INPUTS ==================== */
 
-.outline-none {
+.finanzas-module .outline-none {
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
 
-.text-right {
+.finanzas-module .text-right {
   text-align: right;
 }
 
 /* ==================== PADDING & DIMENSIONS ==================== */
 
-.p-4 {
+.finanzas-module .p-4 {
   padding: 1rem;
 }
 
-.p-6 {
+.finanzas-module .p-6 {
   padding: 1.5rem;
 }
 
-.p-8 {
+.finanzas-module .p-8 {
   padding: 2rem;
 }
 
-.px-2 {
+.finanzas-module .px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
 }
 
-.py-0\.5 {
+.finanzas-module .py-0\.5 {
   padding-top: 0.125rem;
   padding-bottom: 0.125rem;
 }
 
-.px-3 {
+.finanzas-module .px-3 {
   padding-left: 0.75rem;
   padding-right: 0.75rem;
 }
 
-.py-2 {
+.finanzas-module .py-2 {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
 
-.px-4 {
+.finanzas-module .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
 }
 
-.py-3 {
+.finanzas-module .py-3 {
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
 }
 
-.pb-3 {
+.finanzas-module .pb-3 {
   padding-bottom: 0.75rem;
 }
 
 /* ==================== OVERFLOW ==================== */
 
-.overflow-x-auto {
+.finanzas-module .overflow-x-auto {
   overflow-x: auto;
 }
 
 /* ==================== Z-INDEX ==================== */
 
-.z-50 {
+.finanzas-module .z-50 {
   z-index: 50;
 }
 
 /* ==================== OPACITY ==================== */
 
-.bg-opacity-70 {
+.finanzas-module .bg-opacity-70 {
   --tw-bg-opacity: 0.7;
 }
 
-.bg-black {
+.finanzas-module .bg-black {
   background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1));
 }
 
 /* ==================== TABLES ==================== */
 
-.divide-y {
+.finanzas-module .divide-y {
   border-top-width: 0;
 }
 
-.divide-y > * + * {
+.finanzas-module .divide-y > * + * {
   border-top-width: 1px;
 }
 
-.divide-gray-700 > * + * {
+.finanzas-module .divide-gray-700 > * + * {
   border-color: #374151;
 }
 
 /* ==================== COMPONENTES ESPECÍFICOS ==================== */
 
 /* Botón flotante */
-.fixed.bottom-8.right-8 {
+.finanzas-module .fixed.bottom-8.right-8 {
   position: fixed;
   bottom: 2rem;
   right: 2rem;
@@ -2624,12 +2624,12 @@ main {
   transition: background-color 0.2s;
 }
 
-.fixed.bottom-8.right-8:hover {
+.finanzas-module .fixed.bottom-8.right-8:hover {
   background-color: #22d3ee;
 }
 
 /* Modal */
-.fixed.inset-0 {
+.finanzas-module .fixed.inset-0 {
   position: fixed;
   top: 0;
   right: 0;
@@ -2644,7 +2644,7 @@ main {
 }
 
 /* Tabs internos del módulo */
-.flex.gap-4.mb-6.border-b.border-gray-700 button {
+.finanzas-module .flex.gap-4.mb-6.border-b.border-gray-700 button {
   padding-bottom: 0.75rem;
   padding-left: 1rem;
   padding-right: 1rem;
@@ -2656,18 +2656,18 @@ main {
   color: #9ca3af;
 }
 
-.flex.gap-4.mb-6.border-b.border-gray-700 button:hover {
+.finanzas-module .flex.gap-4.mb-6.border-b.border-gray-700 button:hover {
   color: #e5e7eb;
 }
 
 /* Tab activo */
-.flex.gap-4.mb-6.border-b.border-gray-700 button.border-b-2.border-cyan-400 {
+.finanzas-module .flex.gap-4.mb-6.border-b.border-gray-700 button.border-b-2.border-cyan-400 {
   color: #22d3ee;
   border-bottom: 2px solid #22d3ee;
 }
 
 /* Cards de resumen */
-.grid.grid-cols-1.md\:grid-cols-3.gap-6 > div {
+.finanzas-module .grid.grid-cols-1.md\:grid-cols-3.gap-6 > div {
   background-color: #1a2942;
   border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
@@ -2676,7 +2676,7 @@ main {
 }
 
 /* Inputs en las cards */
-.grid.grid-cols-1.md\:grid-cols-3.gap-6 input[type="number"] {
+.finanzas-module .grid.grid-cols-1.md\:grid-cols-3.gap-6 input[type="number"] {
   width: 6rem;
   text-align: right;
   background-color: transparent;
@@ -2686,12 +2686,12 @@ main {
   color: white;
 }
 
-.grid.grid-cols-1.md\:grid-cols-3.gap-6 input[type="number"]:focus {
+.finanzas-module .grid.grid-cols-1.md\:grid-cols-3.gap-6 input[type="number"]:focus {
   border-color: #22d3ee;
 }
 
 /* Formulario modal */
-.fixed.inset-0 .bg-\[\#1a2942\] {
+.finanzas-module .fixed.inset-0 .bg-\[\#1a2942\] {
   background-color: #1a2942;
   border-radius: 0.5rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
@@ -2704,7 +2704,7 @@ main {
 }
 
 /* Select inputs */
-select.field-input {
+.finanzas-module select.field-input {
   padding: 0.5rem 0.75rem;
   background-color: #0f1a2e;
   border: 1px solid #374151;
@@ -2713,15 +2713,15 @@ select.field-input {
   width: 100%;
 }
 
-select.field-input:focus {
+.finanzas-module select.field-input:focus {
   outline: none;
   box-shadow: 0 0 0 2px #06b6d4;
   border-color: transparent;
 }
 
 /* Checkboxes y radios */
-input[type="checkbox"],
-input[type="radio"] {
+.finanzas-module input[type="checkbox"],
+.finanzas-module input[type="radio"] {
   width: 1rem;
   height: 1rem;
   color: #06b6d4;
@@ -2729,7 +2729,7 @@ input[type="radio"] {
 }
 
 /* Timeline de proyección */
-.space-y-6 .border-l-2 {
+.finanzas-module .space-y-6 .border-l-2 {
   border-left: 2px solid #374151;
   margin-left: 3rem;
   padding-left: 2rem;
@@ -2738,15 +2738,15 @@ input[type="radio"] {
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 768px) {
-  .grid-cols-1 {
+  .finanzas-module .grid-cols-1 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
   }
   
-  .p-6 {
+  .finanzas-module .p-6 {
     padding: 1rem;
   }
   
-  .text-3xl {
+  .finanzas-module .text-3xl {
     font-size: 1.5rem;
     line-height: 2rem;
   }
