@@ -804,24 +804,23 @@ const BitacoraFinanzas = () => {
                     )}
                   </div>
                 )}
-              </div>
-            </div> 
 
-              {/* Botones */}
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowMovimientoForm(false)}
-                  className="flex-1 px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-[#0f1a2e] font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleAgregarMovimiento}
-                  disabled={!nuevoMovimiento.monto || !nuevoMovimiento.categoria}
-                  className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Guardar
-                </button>
+                {/* Botones */}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => setShowMovimientoForm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-[#0f1a2e] font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleAgregarMovimiento}
+                    disabled={!nuevoMovimiento.monto || !nuevoMovimiento.categoria}
+                    className="flex-1 px-4 py-2 bg-cyan-500 text-white rounded-lg hover:bg-cyan-400 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Guardar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
