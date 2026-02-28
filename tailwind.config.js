@@ -2,10 +2,16 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,jsx,ts,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        'seller-blue': '#2563eb',
+        'seller-blue-dark': '#1d4ed8',
+        'seller-blue-light': '#dbeafe',
+      }
+    },
   },
   plugins: [],
-};
+}

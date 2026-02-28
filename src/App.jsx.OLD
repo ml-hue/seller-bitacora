@@ -1,23 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
+
+// Auth components (asumiendo que ya los tenés)
 import Login from './components/Login';
+
+// Bitácora 2.0 components
 import Dashboard from './components/v2/Dashboard';
-import ProjectView from './components/v2/ProjectView';
-import ClientPortal from './components/v2/ClientPortal';
+// import ProjectView from './components/v2/ProjectView'; // Lo crearemos después
 
 function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Obtener sesión inicial
+    // Obtener sesión actual
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Escuchar cambios en la autenticación
+    // Escuchar cambios en la auth
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -41,52 +44,34 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Rutas públicas */}
-        <Route 
-          path="/login" 
-          element={!session ? <Login /> : <Navigate to="/dashboard" />} 
-        />
-        
-        {/* Ruta pública para clientes - NO requiere autenticación */}
-        <Route 
-          path="/shared/:token" 
-          element={<ClientPortal />} 
+        {/* Ruta de Login */}
+        <Route
+          path="/login"
+          element={session ? <Navigate to="/dashboard" /> : <Login />}
         />
 
-        {/* Rutas protegidas */}
+        {/* Ruta del Dashboard (nueva) */}
         <Route
           path="/dashboard"
           element={session ? <Dashboard /> : <Navigate to="/login" />}
         />
-        
-        <Route
+
+        {/* Ruta de Proyecto individual (la crearemos después) */}
+        {/* <Route
           path="/project/:projectId"
           element={session ? <ProjectView /> : <Navigate to="/login" />}
-        />
+        /> */}
 
         {/* Ruta por defecto */}
         <Route
           path="/"
-          element={session ? <Navigate to="/dashboard" /> : <Navigate to="/login" />}
+          element={<Navigate to={session ? "/dashboard" : "/login"} />}
         />
 
-        {/* Ruta 404 */}
+        {/* 404 - Not Found */}
         <Route
           path="*"
-          element={
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-              <div className="text-center">
-                <h1 className="text-4xl font-bold text-gray-900 mb-2">404</h1>
-                <p className="text-gray-600 mb-4">Página no encontrada</p>
-                <a
-                  href={session ? "/dashboard" : "/login"}
-                  className="text-blue-500 hover:text-blue-600"
-                >
-                  {session ? "Ir al Dashboard" : "Ir al Login"}
-                </a>
-              </div>
-            </div>
-          }
+          element={<Navigate to={session ? "/dashboard" : "/login"} />}
         />
       </Routes>
     </Router>
