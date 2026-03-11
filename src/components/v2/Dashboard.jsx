@@ -61,7 +61,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             {/* Logo y título */}
             <div className="flex items-center gap-3">
-              <<img src={logoSeller} alt="Seller Bitácora" className="h-10" />
+              <img src={logoSeller} alt="Seller Bitácora" className="h-10" />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Seller Bitácora</h1>
                 <p className="text-xs text-gray-500">v2.0</p>
