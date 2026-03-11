@@ -115,10 +115,7 @@ const ClientPortal = () => {
             </div>
 
             <div className="text-right">
-              <img 
-                src="/src/assets/logo_principal.png" 
-                alt="Seller Group" 
-                className="h-10 mb-1"
+             <img src={logoSeller} alt="Seller Group" className="h-10 ..." />
               />
               <p className="text-xs text-gray-500">Portal del Cliente</p>
             </div>
