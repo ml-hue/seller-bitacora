@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Calendar, Lock, ExternalLink } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import logoSeller from '../../assets/logoS.png';
 
 /**
  * Portal Público del Cliente
@@ -115,8 +116,7 @@ const ClientPortal = () => {
             </div>
 
             <div className="text-right">
-             <img src={logoSeller} alt="Seller Group" className="h-10 ..." />
-              />
+              <img src={logoSeller} alt="Seller Group" className="h-10" />
               <p className="text-xs text-gray-500">Portal del Cliente</p>
             </div>
           </div>

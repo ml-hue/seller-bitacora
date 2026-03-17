@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "proxy": "node server.js",
+    "proxy": "node server.cjs",
     "dev:all": "concurrently \"npm run proxy\" \"npm run dev\"",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",

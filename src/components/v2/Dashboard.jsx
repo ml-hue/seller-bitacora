@@ -7,6 +7,7 @@ import ProjectCard from './ProjectCard';
 import CreateProjectModal from './CreateProjectModal';
 import ImportSessionsModal from './ImportSessionsModal';
 import Footer from './Footer';
+import logoSeller from '../../assets/logo_principal.png';
 
 const Dashboard = () => {
   const navigate = useNavigate();
